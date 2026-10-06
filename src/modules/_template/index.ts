@@ -42,7 +42,10 @@ export default defineModule({
       `,
     )
     // Another page. It lives at  /<your-folder>/second-page
-    .get('/second-page', () => `<h1>My second page</h1><a href="${base}">Back to my front page</a>`),
+    .get(
+      '/second-page',
+      () => `<h1>My second page</h1><a href="${base}">Back to my front page</a>`,
+    ),
 
   // ---- Later: a form that sends data to your router (POST) -------------------------------
   // Add `t` to the import at the top:  import { Elysia, t } from 'elysia'

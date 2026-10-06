@@ -21,7 +21,8 @@ export async function finishResponse(request: Request, response: Response): Prom
   const contentType = response.headers.get('content-type')?.toLowerCase() ?? ''
   if (contentType !== '' && !contentType.startsWith('text/plain')) return response
 
-  let body: BodyInit | null = response.body
+  // Either the original body (left untouched) or a friendly page we swap in.
+  let body: string | typeof response.body = response.body
 
   const isError = response.status === 404 || response.status >= 500
   if (isError) {

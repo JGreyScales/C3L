@@ -1,0 +1,50 @@
+From 3a7b52fc74e5eaa6e2cc8cabf142c3aa444e0a7a Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 6 Oct 2026 14:18:48 -0400
+Subject: [PATCH] Fix the first CI failures: BodyInit type and template
+ formatting
+
+- finishResponse: BodyInit is a DOM type and this project only loads Bun's
+  types, so derive the body type from Response instead
+- _template: wrap the long second-page route the way Biome prints it
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_012Jbb4sK5byobcEGtoxb9um
+---
+ src/core/finishResponse.ts     | 3 ++-
+ src/modules/_template/index.ts | 5 ++++-
+ 2 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/src/core/finishResponse.ts b/src/core/finishResponse.ts
+index a591dbb..b4ec709 100644
+--- a/src/core/finishResponse.ts
++++ b/src/core/finishResponse.ts
+@@ -21,7 +21,8 @@ export async function finishResponse(request: Request, response: Response): Prom
+   const contentType = response.headers.get('content-type')?.toLowerCase() ?? ''
+   if (contentType !== '' && !contentType.startsWith('text/plain')) return response
+ 
+-  let body: BodyInit | null = response.body
++  // Either the original body (left untouched) or a friendly page we swap in.
++  let body: string | typeof response.body = response.body
+ 
+   const isError = response.status === 404 || response.status >= 500
+   if (isError) {
+diff --git a/src/modules/_template/index.ts b/src/modules/_template/index.ts
+index d0cd397..4d84b9f 100644
+--- a/src/modules/_template/index.ts
++++ b/src/modules/_template/index.ts
+@@ -42,7 +42,10 @@ export default defineModule({
+       `,
+     )
+     // Another page. It lives at  /<your-folder>/second-page
+-    .get('/second-page', () => `<h1>My second page</h1><a href="${base}">Back to my front page</a>`),
++    .get(
++      '/second-page',
++      () => `<h1>My second page</h1><a href="${base}">Back to my front page</a>`,
++    ),
+ 
+   // ---- Later: a form that sends data to your router (POST) -------------------------------
+   // Add `t` to the import at the top:  import { Elysia, t } from 'elysia'
+-- 
+2.43.0
+
