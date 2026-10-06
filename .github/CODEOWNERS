@@ -1,0 +1,10 @@
+# CODEOWNERS: the people GitHub asks to review every pull request.
+#
+# For the 4 admins:
+#   1. Replace the example names below with the 4 admins' GitHub usernames.
+#   2. Remove the "# " at the start of the last line.
+#   3. In the branch ruleset for main, switch on "Require review from Code Owners".
+#
+# The line means: for every file in the project, ask these people to review.
+#
+# * @admin-one @admin-two @admin-three @admin-four

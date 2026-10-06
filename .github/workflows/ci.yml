@@ -1,0 +1,49 @@
+name: CI
+
+# Runs on every pull request and on every push to main.
+# Each check shows up as its own line on the pull request, so you can see which one failed.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    # "advice only" checks can fail without turning the whole run red.
+    continue-on-error: ${{ matrix.advisory == true }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Lint
+            run: bun run lint
+          - name: Type check
+            run: bun run typecheck
+          - name: Tests
+            run: bun run test
+          - name: Module sanity check
+            run: bun run sanity
+          - name: Formatting (advice only)
+            run: bun run format:check
+            advisory: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install packages
+        run: bun install
+
+      - name: ${{ matrix.name }}
+        run: ${{ matrix.run }}

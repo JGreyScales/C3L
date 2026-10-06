@@ -1,0 +1,26 @@
+{
+  "name": "c3l",
+  "version": "1.0.0",
+  "private": true,
+  "description": "One LMS website, 12 student modules. Each module adds its own Elysia router and gets a button on the home page.",
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "test": "bun test",
+    "lint": "biome lint .",
+    "fix": "biome check --write .",
+    "format:check": "biome format .",
+    "typecheck": "tsc --noEmit",
+    "sanity": "bun scripts/check-modules.ts",
+    "check": "bun run lint && bun run typecheck && bun run test && bun run sanity"
+  },
+  "dependencies": {
+    "elysia": "^1.0.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.0.0",
+    "@types/bun": "^1.0.0",
+    "typescript": "^5.0.0"
+  }
+}

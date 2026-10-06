@@ -1,0 +1,2668 @@
+From a8992ea6175dd9b83203739ec5bd595211bd17c6 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 6 Oct 2026 13:52:52 -0400
+Subject: [PATCH] Add Elysia module router, 12 LMS module folders, docs and CI
+
+- Main Elysia app that finds every folder in src/modules, mounts its router
+  under the folder name and shows a fast-click button on the home page
+- defineModule / registerModule helpers; a broken module shows as a red card
+  and never takes the site or the other modules down
+- 12 numbered module folders from the project brief, each with a basic
+  add-a-route demo, plus a hidden _template with a unit-test example
+- Strings returned by routes are served as HTML; friendly 404 and error pages
+- Tests and a module sanity check (bun run sanity)
+- GitHub Actions: lint, type check, tests, module sanity check, advisory
+  formatting check
+- README.md (step-by-step guide for students and admins), AI_README.md,
+  CODEOWNERS placeholder for the 4 admins, pull request template
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_012Jbb4sK5byobcEGtoxb9um
+---
+ .github/CODEOWNERS                     |  10 +
+ .github/pull_request_template.md       |  15 +
+ .github/workflows/ci.yml               |  49 ++
+ .gitignore                             |  14 +
+ AI_README.md                           | 271 +++++++++++
+ README.md                              | 603 ++++++++++++++++++++++++-
+ biome.json                             |  31 ++
+ package.json                           |  26 ++
+ scripts/check-modules.ts               |  36 ++
+ src/app.ts                             |  33 ++
+ src/core/checkModules.ts               |  71 +++
+ src/core/defineModule.ts               |  37 ++
+ src/core/finishResponse.ts             |  48 ++
+ src/core/loadModules.ts                |  68 +++
+ src/core/pages.ts                      | 144 ++++++
+ src/core/registry.ts                   |  70 +++
+ src/core/types.ts                      |  33 ++
+ src/index.ts                           |  14 +
+ src/modules/01-identity-users/index.ts |  38 ++
+ src/modules/02-courses/index.ts        |  39 ++
+ src/modules/03-content/index.ts        |  37 ++
+ src/modules/04-assignments/index.ts    |  39 ++
+ src/modules/05-quizzes/index.ts        |  40 ++
+ src/modules/06-gradebook/index.ts      |  39 ++
+ src/modules/07-forum/index.ts          |  38 ++
+ src/modules/08-notifications/index.ts  |  38 ++
+ src/modules/09-analytics/index.ts      |  38 ++
+ src/modules/10-attendance/index.ts     |  38 ++
+ src/modules/11-calendar/index.ts       |  38 ++
+ src/modules/12-dashboard/index.ts      |  38 ++
+ src/modules/_template/index.test.ts    |  18 +
+ src/modules/_template/index.ts         |  61 +++
+ tests/app.test.ts                      | 242 ++++++++++
+ tsconfig.json                          |  17 +
+ 34 files changed, 2370 insertions(+), 1 deletion(-)
+ create mode 100644 .github/CODEOWNERS
+ create mode 100644 .github/pull_request_template.md
+ create mode 100644 .github/workflows/ci.yml
+ create mode 100644 .gitignore
+ create mode 100644 AI_README.md
+ create mode 100644 biome.json
+ create mode 100644 package.json
+ create mode 100644 scripts/check-modules.ts
+ create mode 100644 src/app.ts
+ create mode 100644 src/core/checkModules.ts
+ create mode 100644 src/core/defineModule.ts
+ create mode 100644 src/core/finishResponse.ts
+ create mode 100644 src/core/loadModules.ts
+ create mode 100644 src/core/pages.ts
+ create mode 100644 src/core/registry.ts
+ create mode 100644 src/core/types.ts
+ create mode 100644 src/index.ts
+ create mode 100644 src/modules/01-identity-users/index.ts
+ create mode 100644 src/modules/02-courses/index.ts
+ create mode 100644 src/modules/03-content/index.ts
+ create mode 100644 src/modules/04-assignments/index.ts
+ create mode 100644 src/modules/05-quizzes/index.ts
+ create mode 100644 src/modules/06-gradebook/index.ts
+ create mode 100644 src/modules/07-forum/index.ts
+ create mode 100644 src/modules/08-notifications/index.ts
+ create mode 100644 src/modules/09-analytics/index.ts
+ create mode 100644 src/modules/10-attendance/index.ts
+ create mode 100644 src/modules/11-calendar/index.ts
+ create mode 100644 src/modules/12-dashboard/index.ts
+ create mode 100644 src/modules/_template/index.test.ts
+ create mode 100644 src/modules/_template/index.ts
+ create mode 100644 tests/app.test.ts
+ create mode 100644 tsconfig.json
+
+diff --git a/.github/CODEOWNERS b/.github/CODEOWNERS
+new file mode 100644
+index 0000000..6027a55
+--- /dev/null
++++ b/.github/CODEOWNERS
+@@ -0,0 +1,10 @@
++# CODEOWNERS: the people GitHub asks to review every pull request.
++#
++# For the 4 admins:
++#   1. Replace the example names below with the 4 admins' GitHub usernames.
++#   2. Remove the "# " at the start of the last line.
++#   3. In the branch ruleset for main, switch on "Require review from Code Owners".
++#
++# The line means: for every file in the project, ask these people to review.
++#
++# * @admin-one @admin-two @admin-three @admin-four
+diff --git a/.github/pull_request_template.md b/.github/pull_request_template.md
+new file mode 100644
+index 0000000..f214fac
+--- /dev/null
++++ b/.github/pull_request_template.md
+@@ -0,0 +1,15 @@
++## What did you add or change?
++
++<!-- One or two sentences. Example: "Added the course catalog page to Module 2." -->
++
++## Which module is this for?
++
++<!-- Example: Module 2 (src/modules/02-courses) -->
++
++## Checklist
++
++- [ ] My branch is a feature branch (not `main`) and the commit messages say what changed
++- [ ] I only changed files inside **my own module folder** in `src/modules/`
++- [ ] I ran `bun run check` and it passes
++- [ ] I opened the site in my browser and my button and pages work
++- [ ] I added or updated a test for what I changed
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+new file mode 100644
+index 0000000..cacbdb2
+--- /dev/null
++++ b/.github/workflows/ci.yml
+@@ -0,0 +1,49 @@
++name: CI
++
++# Runs on every pull request and on every push to main.
++# Each check shows up as its own line on the pull request, so you can see which one failed.
++on:
++  push:
++    branches: [main]
++  pull_request:
++
++permissions:
++  contents: read
++
++concurrency:
++  group: ci-${{ github.ref }}
++  cancel-in-progress: true
++
++jobs:
++  check:
++    name: ${{ matrix.name }}
++    runs-on: ubuntu-latest
++    # "advice only" checks can fail without turning the whole run red.
++    continue-on-error: ${{ matrix.advisory == true }}
++    strategy:
++      fail-fast: false
++      matrix:
++        include:
++          - name: Lint
++            run: bun run lint
++          - name: Type check
++            run: bun run typecheck
++          - name: Tests
++            run: bun run test
++          - name: Module sanity check
++            run: bun run sanity
++          - name: Formatting (advice only)
++            run: bun run format:check
++            advisory: true
++    steps:
++      - uses: actions/checkout@v4
++
++      - uses: oven-sh/setup-bun@v2
++        with:
++          bun-version: latest
++
++      - name: Install packages
++        run: bun install
++
++      - name: ${{ matrix.name }}
++        run: ${{ matrix.run }}
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..97aafcc
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,14 @@
++# Installed packages (created by `bun install`, never commit this folder)
++node_modules/
++
++# Secrets and local settings
++.env
++.env.*
++
++# Logs and OS junk
++*.log
++.DS_Store
++Thumbs.db
++
++# Temporary folders created while the tests run
++tests/.tmp-*/
+diff --git a/AI_README.md b/AI_README.md
+new file mode 100644
+index 0000000..10c6a7d
+--- /dev/null
++++ b/AI_README.md
+@@ -0,0 +1,271 @@
++# AI_README: context for AI assistants working in this repo
++
++You are an AI assistant (Claude, Copilot, ChatGPT, Cursor, ...) and a human has asked you to help
++with this repository. Read this file fully before you change anything. The human-facing guide is
++`README.md`; this file explains the context, the concepts and the guardrails.
++
++---
++
++## 1. The project in one paragraph
++
++C3L is a class project: **one Enterprise Learning Management System (LMS), built by 12 student teams**,
++each team owning **one module** (identity, courses, content, assignments, quizzes, gradebook, forum,
++notifications, analytics, attendance, calendar, student dashboard). The modules must follow common
++standards and be able to run together as one site. Technology: **Bun + Elysia + TypeScript**.
++The main app finds every module folder, mounts its Elysia router under the folder name and shows a
++"fast click" button for it on the home page.
++
++Who you are probably talking to: a **student with beginner-level skills** working on **their own
++module only**. Four human **admins** review and approve every pull request into `main`.
++
++---
++
++## 2. Ground rules (read these twice)
++
++1. **Stay inside the student's module folder**: `src/modules/<NN-name>/`. Create, edit and delete
++   files there freely.
++2. **Do not edit anything else** unless the human is clearly an admin and asks for it: `src/core/**`,
++   `src/app.ts`, `src/index.ts`, `tests/app.test.ts`, `scripts/**`, `.github/**`, `biome.json`,
++   `tsconfig.json`, `package.json`, `bun.lock`, `README.md`, `AI_README.md`.
++3. **Never touch another team's module folder**, even for an obvious bug. Tell the human what you
++   found so they can tell that team.
++4. **Never rename or delete a module folder.** The folder name is the public URL and a test checks all
++   12 exist.
++5. **Never push to `main`.** Work on a `feature/<what-you-do>` branch, commit with meaningful messages
++   (imperative, specific: "Add enrollment form to course page"), push the branch, open a pull request
++   using `.github/pull_request_template.md`. Admins approve.
++6. **Stage only the module folder**: `git add src/modules/<folder>`, not `git add .` or `git add -A`.
++7. **Do not add dependencies** (`bun add`) without the human confirming an admin agreed.
++8. **No secrets** (passwords, tokens, keys) in code or commits.
++9. **Use Bun, not Node tooling.** Commands are `bun run ...`. Do not suggest `npm`, `pnpm` or `yarn`.
++   `import.meta.dir` and `Bun.file()` are Bun APIs and are fine here.
++10. **Teach while you help.** The human is learning. Make small changes, explain them in plain
++    language, and keep the code simple and readable. Do not restructure, add frameworks or "improve"
++    things that were not asked for.
++
++---
++
++## 3. How it works
++
++```
++bun run dev
++   └─ src/index.ts            Bun.serve({ fetch: app.fetch })
++        └─ src/app.ts         createApp()
++             ├─ loadModules()   scans src/modules/*            (src/core/loadModules.ts)
++             │    └─ for each folder: import index.ts -> default export -> registerModule()
++             ├─ GET /           home page with one button per module   (src/core/pages.ts)
++             └─ fetch(req)      router.handle(req) -> finishResponse(req, res)
++```
++
++### Module discovery (`src/core/loadModules.ts`)
++
++- Reads the directories in `src/modules`. Skips names starting with `_` or `.` (that hides `_template`).
++- The **folder name becomes the URL prefix**: `src/modules/02-courses` is served at `/02-courses`.
++  Folder names must match `^[a-z0-9]+([-_][a-z0-9]+)*$`.
++- Imports `index.ts` (or `index.js`). It needs a **default export** produced by `defineModule(...)`.
++- A module that fails to load (bad folder name, no `index.ts`, no default export, syntax error,
++  invalid definition) is **recorded as a load failure** and shown as a red card on the home page. It
++  never crashes the site or the other modules.
++
++### The module contract (`src/core/defineModule.ts`)
++
++```ts
++import { Elysia } from 'elysia'
++import { defineModule, moduleBase } from '../../core/defineModule'
++
++const base = moduleBase(import.meta.dir) // "/02-courses": use it to build links
++
++export default defineModule({
++  name: 'Module 2: Course Management',   // button text (required)
++  description: 'Courses, catalog',       // optional text under the button
++  router: new Elysia()                   // required: any Elysia instance, routes relative to the module
++    .get('/', () => `<h1>...</h1>`)      // REQUIRED: front page. The button links here.
++    .get('/other', () => `<h1>...</h1>`),
++})
++```
++
++A module **must** have: a default export from `defineModule`, a route `GET /` that answers `200`
++with HTML. It **may** have any other routes, any number of files, tests next to the code, and
++non-HTML routes (JSON, files).
++
++### Registration (`src/core/registry.ts`)
++
++`registerModule(app, { name, description, router, path, folder })` mounts the router with
++`app.group(path, scope => scope.use(router))` and records the module in a per-app `WeakMap`
++that the home page reads. It throws on an invalid path or a duplicate path. The router is typed
++structurally (`ModuleRouter` = anything with `handle(Request)`) and cast at the `.use()` call,
++because Elysia's generics are invariant and reject otherwise-valid routers.
++
++### Responses (`src/core/finishResponse.ts`)
++
++After Elysia answers, `finishResponse` post-processes the finished `Response`:
++
++- `text/plain` or unlabelled responses with a body are relabelled `text/html; charset=utf-8`.
++  So **a route can just `return '<h1>Hi</h1>'`**.
++- Elysia's bare `404 NOT_FOUND` and 5xx plain-text crashes become friendly HTML pages.
++- JSON, files, already-HTML responses, and bodiless responses (redirects, 204) pass through.
++
++**Why this and not an `onAfterHandle` hook or `@elysiajs/html`?** Elysia hooks apply only to routes
++registered *after* the hook in the same instance, so a hook on the main app does not reliably reach
++routers the students build separately. Post-processing the finished response works for every module
++no matter how it builds its router. This is also why `src/index.ts` uses `Bun.serve({ fetch })`
++rather than `app.listen()`: so the wrapper always runs. Gotcha: anything labelled `text/plain` is
++served as HTML, so real plain text needs a different content type.
++
++---
++
++## 4. The 12 modules
++
++| #  | Folder              | Module                          | Scope from the project brief |
++|----|---------------------|---------------------------------|------------------------------|
++| 1  | `01-identity-users` | Identity & User Management      | Registration, login/logout, password reset, profiles, roles (Student, Instructor, Admin), account activation/deactivation |
++| 2  | `02-courses`        | Course Management               | Create/edit courses, settings, catalog, student enrollment, instructor assignment, archive courses |
++| 3  | `03-content`        | Content Management              | Modules/units, upload materials, organize by week/topic, publishing, visibility controls |
++| 4  | `04-assignments`    | Assignment & Submission System  | Create assignments, due dates, file submission, resubmission rules, history, late tracking, accommodations |
++| 5  | `05-quizzes`        | Quiz & Assessment System        | Create quizzes, multiple-choice / true-false / short-answer, settings, attempts, auto-grading, accommodations |
++| 6  | `06-gradebook`      | Gradebook System                | Record grades, calculations, weighting, final grade, student viewing, instructor dashboard, reports |
++| 7  | `07-forum`          | Discussion Forum System         | Boards, topics, replies, threads, edit/delete posts, moderation |
++| 8  | `08-notifications`  | Notifications & Messaging       | Announcements, in-app notifications, direct messages, assignment/quiz reminders, preferences |
++| 9  | `09-analytics`      | Analytics & Reporting           | Activity statistics, participation reports, completion statistics, quiz reports, instructor and admin dashboards |
++| 10 | `10-attendance`     | Attendance & Participation      | Record attendance, history, excused/unexcused absences, participation, reports, statistics |
++| 11 | `11-calendar`       | Calendar & Scheduling           | Course calendar, deadlines, quiz schedules, event creation, upcoming events, day/week/month views |
++| 12 | `12-dashboard`      | Student Dashboard               | Enrolled courses, upcoming deadlines, recent grades, notifications summary, activity feed, personalized welcome |
++
++Each module's `index.ts` starts with a comment containing its scope. The demo router in each is
++deliberately minimal (`/` and `/hello`) so the student replaces it.
++
++Course-wide requirements that touch code: use Git/GitHub with feature branches, pull requests and
++code review; meaningful commit messages; **unit and integration tests**; follow coding conventions,
++use meaningful names, comment complex logic, avoid duplicated code, follow object-oriented design
++principles. Help the student meet these without over-engineering.
++
++---
++
++## 5. Recipes
++
++### Add a page
++Add one chained ``.get('/path', () => `<html string>`)`` to the module's router. Note the chain:
++every route starts with `.`, and **only the last one ends with a comma** (because the router is a
++property inside the `defineModule({...})` object). Missing or extra commas are the most common
++beginner error here.
++
++```ts
++    .get('/hello', () => `<h1>Hello</h1><a href="${base}">Back</a>`)
++    .get('/catalog', () => `<h1>Catalog</h1><a href="${base}">Back</a>`),
++})
++```
++
++### Links
++Build links with `base` (`${base}/catalog`). Link to the home page with `/`. A plain `.html` file read
++from disk cannot use `${base}`; write the full path (`/02-courses/catalog`).
++
++### Ways to produce HTML
++Inline template string; a helper function that builds pages; an `.html` file next to `index.ts` read
++with `` Bun.file(`${import.meta.dir}/page.html`).text() `` (return the **text**, a string).
++
++### User input
++Escape anything a user typed before putting it in HTML: `import { escapeHtml } from '../../core/pages'`.
++Never interpolate raw request data into a page.
++
++### Forms (POST)
++See the commented example at the bottom of `src/modules/_template/index.ts`
++(`.post('/form', ({ body }) => ..., { body: t.Object({ ... }) })` with `t` imported from `elysia`).
++
++### JSON routes for other modules
++Returning an object from a handler sends JSON (`application/json`), which `finishResponse` leaves
++untouched. Suggested convention for integration: keep pages at the module's normal routes and expose
++data under `/api/...` inside the module (for example `/02-courses/api/courses`). Treat this as a
++suggestion; admins decide the integration contract.
++
++### Tests
++`bun test` runs every `*.test.ts`. A module's router works standalone, with addresses relative to the
++module (no folder prefix):
++
++```ts
++import { expect, test } from 'bun:test'
++import mod from './index'
++
++test('front page', async () => {
++  const res = await mod.router.handle(new Request('http://localhost/'))
++  expect(res.status).toBe(200)
++})
++```
++
++A full example is in `src/modules/_template/index.test.ts`. For tests that go through the main app
++(integration), use `createApp()` from `src/app.ts` and `app.fetch(new Request(...))`; this exercises
++mounting and `finishResponse` too.
++
++### Extra module folder
++Copy `src/modules/_template`, rename the copy (valid folder name, see above), restart the dev server
++(new folders are discovered at startup).
++
++---
++
++## 6. Commands
++
++| Command                | What it does |
++|------------------------|--------------|
++| `bun install`          | Install dependencies (first time, and after `package.json` changes) |
++| `bun run dev`          | Start on `http://localhost:3000` (`PORT` env var changes it). Restarts on file changes; **new folders need a manual restart** |
++| `bun run start`        | Start without file watching |
++| `bun run check`        | Lint + typecheck + tests + sanity. Run before every push |
++| `bun run lint`         | Biome lint (blocking in CI) |
++| `bun run fix`          | Biome: auto-fix lint problems and format |
++| `bun run format:check` | Biome formatting check (advisory in CI) |
++| `bun run typecheck`    | `tsc --noEmit` (strict) |
++| `bun run test`         | `bun test` |
++| `bun run sanity`       | Load every module and open its `/`; fails if any is broken or not HTML |
++
++---
++
++## 7. CI and branch protection
++
++`.github/workflows/ci.yml` runs on pull requests and pushes to `main`, one job per check:
++**Lint**, **Type check**, **Tests**, **Module sanity check** (all blocking), and
++**Formatting (advice only)** (non-blocking). The sanity script prints GitHub `::error` annotations
++pointing at the broken module folder. `main` is meant to be protected: pull request required, an
++admin approval required (`.github/CODEOWNERS`), checks must pass. An AI cannot and should not work
++around this.
++
++---
++
++## 8. Repo map
++
++```
++src/index.ts                  server entry (Bun.serve)
++src/app.ts                    createApp(): main router + modules + home page
++src/core/types.ts             ModuleRouter, ModuleDefinition, RegisteredModule, LoadFailure
++src/core/defineModule.ts      defineModule() (validates), moduleBase()
++src/core/registry.ts          registerModule(), recordLoadFailure(), getters, SAFE_NAME
++src/core/loadModules.ts       module discovery and error isolation
++src/core/pages.ts             escapeHtml(), home / 404 / error pages
++src/core/finishResponse.ts    text -> HTML relabelling, friendly errors
++src/core/checkModules.ts      the sanity check used by the script and the tests
++src/modules/_template/        copy-me module (+ example test), hidden from the home page
++src/modules/NN-name/index.ts  the 12 modules
++tests/app.test.ts             tests for the machinery (writes temp modules into tests/.tmp-modules-*)
++scripts/check-modules.ts      `bun run sanity`
++.github/                      workflows/ci.yml, CODEOWNERS, pull_request_template.md
++```
++
++---
++
++## 9. Common mistakes (check for these first when something is broken)
++
++- No `export default defineModule({...})` (or a named export instead of default).
++- Missing `GET /` route, or a `/` route that returns JSON. The module's button needs HTML at `/`.
++- Comma/dot mistakes in the route chain; strings using quotes instead of backticks when `${base}` is
++  used.
++- Folder name with uppercase letters, spaces or dots (not loadable).
++- Edited a file outside the module folder (admins will reject the pull request).
++- Expecting a new folder to appear without restarting `bun run dev`.
++- Putting raw user input into HTML without `escapeHtml`.
++- Using Node-only assumptions or `npm`; this repo runs on Bun.
++- Adding a heavy framework or state-management layer to a beginner module. Keep it simple.
++
++---
++
++## 10. When unsure
++
++Ask the human. Prefer the smallest change that works, inside their folder, and explain it. If a
++request would require changing shared files, say so and suggest they ask an admin.
+diff --git a/README.md b/README.md
+index 29db319..c4d683b 100644
+--- a/README.md
++++ b/README.md
+@@ -1 +1,602 @@
+-# C3L
+\ No newline at end of file
++# C3L: Enterprise Learning Management System
++
++One website, built by 12 teams. Every team owns **one module** (like "Course Management" or
++"Gradebook") and writes its pages inside its own folder. The main app finds every module by itself
++and puts a **big button for it on the home page**, so everybody can jump straight to their work.
++
++```
++                      http://localhost:3000
++        ┌──────────────────────────────────────────────┐
++        │  C3L                                         │
++        │  ┌────────────┐ ┌────────────┐ ┌──────────┐  │
++        │  │ Module 1   │ │ Module 2   │ │ Module 3 │  │   <- one button per module,
++        │  │ Identity   │ │ Courses    │ │ Content  │  │      made automatically
++        │  │ [ Open ]   │ │ [ Open ]   │ │ [ Open ] │  │
++        │  └────────────┘ └────────────┘ └──────────┘  │
++        │        ... 12 buttons in total ...           │
++        └──────────────────────────────────────────────┘
++```
++
++You do not need to know how the main app works. You only need to know **how to add a page to your
++own module**. That is step 6 below, and it takes about two minutes.
++
++> Using an AI assistant (Claude, Copilot, ChatGPT...)? Tell it to read **`AI_README.md`** first.
++> It explains the project so the AI does not break things for the other teams.
++
++---
++
++## Contents
++
++1. [Which module is mine?](#1-which-module-is-mine)
++2. [Install the tools (once)](#2-install-the-tools-once)
++3. [Get the project and run it (once)](#3-get-the-project-and-run-it-once)
++4. [Your everyday workflow](#4-your-everyday-workflow)
++5. [The rules](#5-the-rules)
++6. [Add a page to your module](#6-add-a-page-to-your-module)
++7. [Other ways to return HTML](#7-other-ways-to-return-html)
++8. [Check your work before you push](#8-check-your-work-before-you-push)
++9. [Write a test](#9-write-a-test)
++10. [Something went wrong](#10-something-went-wrong)
++11. [How the project fits together](#11-how-the-project-fits-together)
++12. [For the 4 admins](#12-for-the-4-admins)
++13. [Glossary](#13-glossary)
++
++---
++
++## 1. Which module is mine?
++
++Every module already has a folder with a working demo inside. **Your folder is the only place you
++change files.** The folder name is also your web address.
++
++| #  | Module                            | Your folder                      | Your address (when running locally)           |
++|----|-----------------------------------|----------------------------------|-----------------------------------------------|
++| 1  | Identity & User Management        | `src/modules/01-identity-users`  | http://localhost:3000/01-identity-users       |
++| 2  | Course Management                 | `src/modules/02-courses`         | http://localhost:3000/02-courses              |
++| 3  | Content Management                | `src/modules/03-content`         | http://localhost:3000/03-content              |
++| 4  | Assignment & Submission System    | `src/modules/04-assignments`     | http://localhost:3000/04-assignments          |
++| 5  | Quiz & Assessment System          | `src/modules/05-quizzes`         | http://localhost:3000/05-quizzes              |
++| 6  | Gradebook System                  | `src/modules/06-gradebook`       | http://localhost:3000/06-gradebook            |
++| 7  | Discussion Forum System           | `src/modules/07-forum`           | http://localhost:3000/07-forum                |
++| 8  | Notifications & Messaging         | `src/modules/08-notifications`   | http://localhost:3000/08-notifications        |
++| 9  | Analytics & Reporting             | `src/modules/09-analytics`       | http://localhost:3000/09-analytics            |
++| 10 | Attendance & Participation        | `src/modules/10-attendance`      | http://localhost:3000/10-attendance           |
++| 11 | Calendar & Scheduling             | `src/modules/11-calendar`        | http://localhost:3000/11-calendar             |
++| 12 | Student Dashboard                 | `src/modules/12-dashboard`       | http://localhost:3000/12-dashboard            |
++
++Open your folder's `index.ts`. The comment at the top lists what your module has to do, copied from
++the project brief.
++
++**Do not rename or delete your folder.** Everybody's links depend on the names.
++
++---
++
++## 2. Install the tools (once)
++
++You need three things: **Git**, **Bun** and a code editor. Skip any you already have.
++
++### 2.1 Git (saves your work and shares it)
++
++Download and install from https://git-scm.com/downloads. Keep all the default choices.
++
++Then open a terminal (see the tip below) and tell Git who you are. Use your own name and the email of
++your GitHub account:
++
++```
++git config --global user.name "Your Name"
++git config --global user.email "you@example.com"
++```
++
++### 2.2 Bun (runs the project)
++
++Open a terminal and paste the line for your computer.
++
++**Windows:**
++
++```
++powershell -c "irm bun.sh/install.ps1|iex"
++```
++
++**Mac or Linux:**
++
++```
++curl -fsSL https://bun.com/install | bash
++```
++
++(Windows needs Windows 10 version 1809 or newer. If the line does not work and you already have
++Node.js, `npm install -g bun` also installs Bun.)
++
++**Now close the terminal and open a new one.** This step matters: the old terminal does not know
++about Bun yet.
++
++### 2.3 A code editor
++
++Install [Visual Studio Code](https://code.visualstudio.com). Any editor works, but the rest of this
++guide assumes VS Code.
++
++### 2.4 Check that it worked
++
++In a new terminal:
++
++```
++git --version
++bun --version
++```
++
++Both should print a version number. If one says "command not found" or "not recognized", go to
++[Something went wrong](#10-something-went-wrong).
++
++> **Tip: what is a terminal?** It is the window where you type commands. In VS Code, press
++> **Ctrl + `** (the key above Tab) to open one at the bottom. It starts inside your project folder,
++> which is exactly where you want it.
++
++---
++
++## 3. Get the project and run it (once)
++
++Type these one at a time, pressing Enter after each:
++
++```
++git clone https://github.com/JGreyScales/C3L.git
++cd C3L
++bun install
++bun run dev
++```
++
++What they do:
++
++| Command                | What happens                                                         |
++|------------------------|----------------------------------------------------------------------|
++| `git clone ...`        | Downloads the project into a new folder called `C3L`                 |
++| `cd C3L`               | Moves your terminal into that folder                                 |
++| `bun install`          | Downloads the libraries the project uses (takes a minute)            |
++| `bun run dev`          | Starts the website                                                   |
++
++You should see:
++
++```
++  C3L is running!  Open  http://localhost:3000  in your browser.
++```
++
++Open **http://localhost:3000** in your browser. You should see 12 module buttons. Click yours.
++
++To stop the website, click in the terminal and press **Ctrl + C**.
++
++Then open the folder in VS Code: **File > Open Folder...** and pick the `C3L` folder.
++
++> While `bun run dev` is running, every time you **save a file** the site restarts by itself.
++> Just refresh your browser to see the change.
++
++---
++
++## 4. Your everyday workflow
++
++You never change the `main` branch directly. `main` is the finished, shared version, and it is
++protected: **changes only get in through a pull request that an admin approves.** The steps below are
++how you do that.
++
++### Step 1. Start from the latest version
++
++```
++git checkout main
++git pull
++```
++
++### Step 2. Make your own branch
++
++A branch is your private copy to work on. Give it a name that says what you are doing:
++
++```
++git checkout -b feature/module-2-course-catalog
++```
++
++(Always start the name with `feature/`, use lowercase and use `-` instead of spaces.)
++
++### Step 3. Do your work
++
++Edit files inside **your module folder**. Start the site with `bun run dev` and look at it in your
++browser as you go.
++
++### Step 4. Check your work
++
++```
++bun run check
++```
++
++It must finish without errors. [Section 8](#8-check-your-work-before-you-push) explains it.
++
++### Step 5. Save your work (commit)
++
++Add only **your folder**, then commit with a message that says what you changed:
++
++```
++git add src/modules/02-courses
++git commit -m "Add course catalog page to module 2"
++```
++
++Good messages say what changed ("Add enrollment form to course page"). Bad messages say nothing
++("stuff", "fix", "asdf"). Your teacher can see them.
++
++You can do steps 3 to 5 as many times as you like.
++
++### Step 6. Send it to GitHub
++
++```
++git push -u origin feature/module-2-course-catalog
++```
++
++(Use your own branch name. The first push needs `-u origin ...`. Later pushes can just be `git push`.)
++
++Git may open a window asking you to sign in to GitHub. Sign in with your account.
++
++### Step 7. Open a pull request
++
++1. Open the project on GitHub: https://github.com/JGreyScales/C3L
++2. A yellow banner shows **"Compare & pull request"**. Click it.
++3. Fill in the short form (what you changed and which module). Tick the boxes that are true.
++4. Click **Create pull request**.
++
++### Step 8. Wait for the checks and the review
++
++- GitHub runs the automatic checks. You want a **green tick**. A red cross means something needs
++  fixing: click **Details** next to the red line to read why. Fix it on your computer, commit and
++  push again. The pull request updates by itself.
++- One of the admins reviews your pull request. They may **approve** it or **ask for changes**. If
++  they ask for changes, change your code, commit, push again and tell them.
++- When an admin approves and the checks are green, the pull request is merged into `main`.
++
++### Step 9. After it is merged
++
++```
++git checkout main
++git pull
++```
++
++Now start again from step 2 for your next task.
++
++---
++
++## 5. The rules
++
++**Do**
++
++- Work on a `feature/...` branch, always.
++- Only change files **inside your own module folder** (`src/modules/<your-folder>`).
++- Run `bun run check` before you push.
++- Write commit messages that say what you changed.
++- Ask an admin before you add a new library (`bun add ...`).
++
++**Do not**
++
++- Do not push to `main`. GitHub will refuse it anyway.
++- Do not edit other teams' folders, even to "just fix a typo". Tell them instead.
++- Do not edit `src/core`, `tests/app.test.ts`, `.github`, `package.json` or other files in the
++  project's root. They hold the whole thing together. If you think something needs to change there,
++  ask an admin.
++- Do not rename your folder.
++- Do not put passwords or secret keys in your code.
++
++---
++
++## 6. Add a page to your module
++
++Open `src/modules/<your-folder>/index.ts`. It looks like this (shortened, this is Module 2):
++
++```ts
++import { Elysia } from 'elysia'
++import { defineModule, moduleBase } from '../../core/defineModule'
++
++const base = moduleBase(import.meta.dir)
++
++export default defineModule({
++  name: 'Module 2: Course Management',
++  description: 'Courses, catalog, enrollment',
++
++  router: new Elysia()
++    .get('/', () => `<h1>Module 2: Course Management</h1> ...`)
++    .get('/hello', () => `<h1>Hello from Module 2</h1><a href="${base}">Back</a>`),
++})
++```
++
++The part that matters is the **router**. A *route* is one line that says: "when someone visits this
++address, give them this HTML".
++
++| In the code    | Means                                                                          |
++|----------------|--------------------------------------------------------------------------------|
++| `.get('/', ...)`      | The front page of your module (your button on the home page opens this) |
++| `.get('/hello', ...)` | A page at `http://localhost:3000/<your-folder>/hello`                   |
++| `base`                | Your own address, like `/02-courses`. Use it to build links.            |
++
++### Add a new page: 3 steps
++
++**1. Copy the `/hello` line** and paste it right below itself.
++
++**2. Change the address and the HTML** in your copy.
++
++**3. Fix the comma.** Only the **very last** route line ends with a comma. The ones above it do not.
++
++Before:
++
++```ts
++    .get('/hello', () => `<h1>Hello from Module 2</h1><a href="${base}">Back</a>`),
++})
++```
++
++After (a new `/catalog` page):
++
++```ts
++    .get('/hello', () => `<h1>Hello from Module 2</h1><a href="${base}">Back</a>`)
++    .get('/catalog', () => `<h1>Course catalog</h1><a href="${base}">Back</a>`),
++})
++```
++
++Save, then open **http://localhost:3000/02-courses/catalog** (with your own folder name). Done.
++
++### Linking pages together
++
++Always build links with `base`, so they work no matter where the project runs:
++
++```ts
++`<a href="${base}/catalog">Go to the catalog</a>`
++```
++
++To link back to the home page with all the buttons, use `<a href="/">`.
++
++> **Backticks, not quotes.** The HTML goes between backticks `` ` `` (the key left of the 1).
++> Backticks let you put `${base}` inside the text and write across several lines.
++
++---
++
++## 7. Other ways to return HTML
++
++Your module only has to do one thing: **return a string of HTML** from a route. How you create that
++string is up to your team. Here are three popular ways.
++
++**A. Write it right in the route** (what you have been doing).
++
++**B. Build it with a function** (good when many pages look alike):
++
++```ts
++function page(title: string, content: string): string {
++  return `<!doctype html>
++    <html>
++      <head><meta charset="utf-8"><title>${title}</title></head>
++      <body>${content}<p><a href="/">All modules</a></p></body>
++    </html>`
++}
++
++// ...inside the router:
++.get('/catalog', () => page('Catalog', '<h1>Course catalog</h1>'))
++```
++
++**C. Keep the HTML in its own `.html` file** next to `index.ts`, and read it:
++
++```ts
++.get('/catalog', () => Bun.file(`${import.meta.dir}/catalog.html`).text())
++```
++
++A plain `.html` file cannot use `${base}`, so write the full address in its links
++(like `/02-courses/catalog`).
++
++**Other things you will probably need**
++
++- **Forms and POST:** open `src/modules/_template/index.ts` and read the example at the bottom.
++- **Data for other modules:** if a route returns an object (`() => ({ courses: [] })`), it is sent as
++  JSON instead of HTML. Handy for routes that other modules call.
++- **User text in your pages:** if you put text typed by a user into a page, wrap it in
++  `escapeHtml(...)` (from `src/core/pages`) first, so nobody can sneak their own HTML in.
++- **More about Elysia** (the library that handles routes): https://elysiajs.com
++
++---
++
++## 8. Check your work before you push
++
++```
++bun run check
++```
++
++This runs four checks, the same ones GitHub runs on your pull request:
++
++| Check             | What it looks for                                                       | Command             |
++|-------------------|-------------------------------------------------------------------------|---------------------|
++| Lint              | Likely mistakes: unused variables, things that look wrong               | `bun run lint`      |
++| Type check        | Type errors in your TypeScript                                          | `bun run typecheck` |
++| Tests             | Your tests (and the project's) pass                                     | `bun run test`      |
++| Module sanity     | Every module loads, and its front page (`/`) answers with HTML          | `bun run sanity`    |
++
++If it reports problems, read the message, fix the file, and run it again.
++
++**Easy fix for style problems:**
++
++```
++bun run fix
++```
++
++It tidies your formatting and fixes the simple lint problems for you. (Formatting alone never turns
++your pull request red. It is only advice.)
++
++---
++
++## 9. Write a test
++
++The course requires unit and integration tests, and `bun run check` runs them. Look at
++`src/modules/_template/index.test.ts`. It is a complete small test:
++
++```ts
++import { expect, test } from 'bun:test'
++import mod from './index'
++
++const get = (path: string) => mod.router.handle(new Request(`http://localhost${path}`))
++
++test('the front page answers 200', async () => {
++  const response = await get('/')
++  expect(response.status).toBe(200)
++  expect(await response.text()).toContain('Hello')
++})
++```
++
++To add one to your module:
++
++1. Create `index.test.ts` in **your** folder.
++2. Copy the test above into it and change the checks to match your pages.
++3. Run `bun run test`. Your tests run along with the others.
++
++Inside the test, your router's addresses start at `/` (no folder name), so `get('/catalog')` tests
++your catalog page.
++
++---
++
++## 10. Something went wrong
++
++| What you see | What to do |
++|--------------|------------|
++| `bun: command not found` or `'bun' is not recognized` | Close the terminal (or VS Code) and open it again. Still broken? Run the Bun install line from step 2.2 again, then open a new terminal. |
++| `git: command not found` | Install Git (step 2.1), then open a new terminal. |
++| `bun run dev` says **port 3000 is busy** | Another copy is still running. Find the terminal where it runs and press Ctrl + C. Or use another port: Mac/Linux/Git Bash `PORT=3001 bun run dev`, Windows PowerShell `$env:PORT=3001; bun run dev`, Windows cmd `set PORT=3001 && bun run dev`. Then open `http://localhost:3001`. |
++| The home page shows a **red card** for my module | The card tells you what is wrong. Common causes: no `export default defineModule({...})`, a typo in the code, or a missing `name`. Fix it, save, refresh. If the card stays, stop the site (Ctrl + C) and start it again. |
++| My new page says **404** | Check the address (it is `/<your-folder>/<route>`), check you saved the file, and check the route line starts with `.get(`. |
++| **Red squiggly lines** in VS Code | Usually a missing comma, a missing backtick or a missing `)`. Remember: only the last route line ends with a comma. |
++| `bun run check` fails on **Lint** or **Type check** | Read the file name and line number in the message. Try `bun run fix` first, then run `bun run check` again. |
++| `bun run check` fails on **Module sanity** | Your `/` route must exist and return HTML. The message says which. |
++| `git push` says **protected branch** or **permission denied** on `main` | That is expected, nobody pushes to `main`. Make a branch (`git checkout -b feature/my-change`) and push that one. |
++| `git push` says **no upstream branch** | Use the full command from step 6: `git push -u origin <your-branch-name>`. |
++| `git pull` or `git merge` talks about a **conflict** | Two people changed the same lines. Do not delete things you do not understand. Ask an admin or a teammate to sit with you. (Because everyone works in their own folder, this should be rare.) |
++| The pull request has a **red cross** | Click **Details** next to the red line. It says which check failed and why. Fix it locally, commit and push again. |
++| Anything else | Copy the **whole error message** and ask your team or an admin. The whole message, not a description of it, makes problems much faster to solve. |
++
++---
++
++## 11. How the project fits together
++
++You do not need this to do your work, but it is good to know.
++
++```
++C3L/
++├── src/
++│   ├── index.ts              starts the web server
++│   ├── app.ts                builds the whole site
++│   ├── core/                 the machinery. Admins only. Do not edit.
++│   │   ├── defineModule.ts     what every module calls: defineModule({...})
++│   │   ├── registry.ts         the helper that adds a module to the main router
++│   │   ├── loadModules.ts      finds every folder in src/modules
++│   │   ├── pages.ts            the home page with the buttons
++│   │   └── ...
++│   └── modules/              <-- YOUR WORK LIVES HERE
++│       ├── _template/          copy-me folder (hidden from the home page)
++│       ├── 01-identity-users/  Module 1
++│       ├── 02-courses/         Module 2
++│       ├── ...                 ...
++│       └── 12-dashboard/       Module 12
++├── tests/                    tests for the machinery
++├── scripts/                  the sanity check
++├── .github/                  automatic checks, pull request form, admin list
++├── README.md                 this file
++└── AI_README.md              the same story, for AI assistants
++```
++
++What happens when you start the site:
++
++1. The app looks inside `src/modules` and opens every folder (except those starting with `_`).
++2. Each folder's `index.ts` ends with `defineModule({ name, router })`.
++3. A helper adds that router to the **main router**, under the folder's name
++   (`02-courses` becomes `/02-courses`).
++4. The helper also remembers the module, so the home page shows a button for it.
++5. If a module is broken, the home page shows a red card for it and **all other modules keep
++   working**.
++
++Nobody ever has to edit a shared file to add their module. That is why teams almost never get
++merge conflicts.
++
++---
++
++## 12. For the 4 admins
++
++### 12.1 One-time setup
++
++1. **Install and commit the lock file.** Run `bun install` once on your computer. It creates
++   `bun.lock`. Commit it (through a pull request) so every student installs identical versions.
++2. **Add the 4 admins to `.github/CODEOWNERS`.** Put the 4 GitHub usernames on the last line and
++   remove the `# `. GitHub will then request a review from the admins on every pull request.
++3. **Protect `main`.** On GitHub: **Settings > Rules > Rulesets > New ruleset > New branch ruleset**
++   (older repositories may use **Settings > Branches > Add branch protection rule**). GitHub's
++   wording changes now and then, but you want these settings:
++
++   | Setting                                                       | Value                                             |
++   |---------------------------------------------------------------|---------------------------------------------------|
++   | Enforcement status                                            | Active                                            |
++   | Target branches                                               | Default branch (`main`)                           |
++   | Bypass list                                                   | Empty, so even admins go through pull requests    |
++   | Restrict deletions                                            | On                                                |
++   | Block force pushes                                            | On                                                |
++   | Require a pull request before merging                         | On                                                |
++   | ... Required approvals                                        | **1** (raise to 2 if you want it stricter)        |
++   | ... Dismiss stale approvals when new commits are pushed       | On                                                |
++   | ... Require review from Code Owners                           | On (once CODEOWNERS has the 4 admins)             |
++   | ... Require conversation resolution before merging            | On                                                |
++   | Require status checks to pass                                 | On, with the 4 checks below                       |
++   | ... Require branches to be up to date before merging          | On                                                |
++
++   **Required checks:** `Lint`, `Type check`, `Tests`, `Module sanity check`.
++   They only appear in the dropdown after the CI workflow has run once, so open one pull request
++   first (the one that adds `bun.lock` is perfect), then add them.
++
++   **Leave `Formatting (advice only)` out.** It is deliberately not required, so style issues never
++   block a student.
++
++4. Optional: **Settings > General > Pull Requests > Automatically delete head branches** keeps the
++   branch list tidy.
++
++Students cannot push to `main` once the ruleset is active, and `main` only moves when one of the
++admins approves a pull request whose checks are green.
++
++### 12.2 Reviewing a pull request
++
++1. Open the pull request and look at the **checks** at the bottom. Green means the code loads, the
++   module's front page answers with HTML, and the tests pass. Red means send it back.
++2. Open the **Files changed** tab. A normal pull request only touches **one folder** in
++   `src/modules`. If it touches `src/core`, `.github`, `package.json` or another team's folder, ask
++   why before approving.
++3. Click **Review changes**, then **Approve** or **Request changes** (and say what to fix).
++
++You cannot approve a pull request you opened yourself. Another admin has to.
++
++### 12.3 What the automatic checks do
++
++Defined in `.github/workflows/ci.yml`. They run on every pull request and on every push to `main`:
++
++| Check                          | Runs                | Blocks merging? |
++|--------------------------------|---------------------|-----------------|
++| Lint                           | `bun run lint`      | Yes             |
++| Type check                     | `bun run typecheck` | Yes             |
++| Tests                          | `bun run test`      | Yes             |
++| Module sanity check            | `bun run sanity`    | Yes             |
++| Formatting (advice only)       | `bun run format:check` | No           |
++
++The **module sanity check** is the one that protects the shared site: it loads every module and opens
++its front page, and it writes any problem as a red message on the pull request. A test also fails if
++one of the 12 module folders is renamed or deleted.
++
++### 12.4 Changing the project
++
++- **Add a 13th module:** copy `src/modules/_template`, rename the copy, restart the site.
++- **Add a library:** `bun add <name>`, commit `package.json` and `bun.lock` through a pull request.
++- **Change the port:** set `PORT` before `bun run dev` (see the troubleshooting table).
++
++---
++
++## 13. Glossary
++
++| Word              | Meaning                                                                          |
++|-------------------|----------------------------------------------------------------------------------|
++| Terminal          | The window where you type commands                                               |
++| Bun               | The program that runs the project (like Node.js, but faster and simpler)         |
++| Elysia            | The library that handles web addresses and sends back pages                      |
++| Route             | One line: "when someone visits this address, send them this"                     |
++| Router            | A collection of routes. Every module has its own.                                |
++| Module            | One of the 12 parts of the LMS. Each team builds one.                            |
++| Git               | Tool that saves versions of the code and shares them                             |
++| Branch            | Your own copy of the code to work on without disturbing anyone                   |
++| Commit            | A saved snapshot of your changes, with a message                                 |
++| Pull request (PR) | A request to merge your branch into `main`, so an admin can review it            |
++| CI / checks       | Robots on GitHub that test your code on every pull request                       |
++| Lint              | A tool that points out likely mistakes in code                                   |
++| Merge conflict    | Two people changed the same lines and Git needs a human to choose                |
+diff --git a/biome.json b/biome.json
+new file mode 100644
+index 0000000..f2bf3c1
+--- /dev/null
++++ b/biome.json
+@@ -0,0 +1,31 @@
++{
++  "vcs": {
++    "enabled": true,
++    "clientKind": "git",
++    "useIgnoreFile": true
++  },
++  "files": {
++    "includes": ["**", "!**/*.html"]
++  },
++  "assist": {
++    "enabled": false
++  },
++  "formatter": {
++    "enabled": true,
++    "indentStyle": "space",
++    "indentWidth": 2,
++    "lineWidth": 100
++  },
++  "javascript": {
++    "formatter": {
++      "quoteStyle": "single",
++      "semicolons": "asNeeded"
++    }
++  },
++  "linter": {
++    "enabled": true,
++    "rules": {
++      "recommended": true
++    }
++  }
++}
+diff --git a/package.json b/package.json
+new file mode 100644
+index 0000000..3e24955
+--- /dev/null
++++ b/package.json
+@@ -0,0 +1,26 @@
++{
++  "name": "c3l",
++  "version": "1.0.0",
++  "private": true,
++  "description": "One LMS website, 12 student modules. Each module adds its own Elysia router and gets a button on the home page.",
++  "type": "module",
++  "scripts": {
++    "dev": "bun --watch src/index.ts",
++    "start": "bun src/index.ts",
++    "test": "bun test",
++    "lint": "biome lint .",
++    "fix": "biome check --write .",
++    "format:check": "biome format .",
++    "typecheck": "tsc --noEmit",
++    "sanity": "bun scripts/check-modules.ts",
++    "check": "bun run lint && bun run typecheck && bun run test && bun run sanity"
++  },
++  "dependencies": {
++    "elysia": "^1.0.0"
++  },
++  "devDependencies": {
++    "@biomejs/biome": "^2.0.0",
++    "@types/bun": "^1.0.0",
++    "typescript": "^5.0.0"
++  }
++}
+diff --git a/scripts/check-modules.ts b/scripts/check-modules.ts
+new file mode 100644
+index 0000000..a4890f0
+--- /dev/null
++++ b/scripts/check-modules.ts
+@@ -0,0 +1,36 @@
++import { checkModules } from '../src/core/checkModules'
++
++// Run it with:  bun run sanity
++// It loads every module and opens its front page, then prints which modules are OK.
++
++const results = await checkModules()
++const onGitHub = process.env.GITHUB_ACTIONS === 'true'
++
++if (results.length === 0) {
++  console.log('No modules found yet in src/modules. Nothing to check.')
++}
++
++for (const result of results) {
++  if (result.ok) {
++    console.log(`  OK    ${result.folder}`)
++    continue
++  }
++
++  console.log(`  FAIL  ${result.folder}\n          ${result.problem}`)
++
++  // On GitHub this turns into a red message on the pull request.
++  if (onGitHub) {
++    const file = `src/modules/${result.folder}`
++    const text = String(result.problem).replaceAll('\n', ' ')
++    console.log(`::error file=${file},title=Module "${result.folder}" is broken::${text}`)
++  }
++}
++
++const failed = results.filter((result) => !result.ok)
++console.log(
++  failed.length === 0
++    ? `\nAll ${results.length} module(s) are OK.`
++    : `\n${failed.length} of ${results.length} module(s) need fixing.`,
++)
++
++process.exit(failed.length === 0 ? 0 : 1)
+diff --git a/src/app.ts b/src/app.ts
+new file mode 100644
+index 0000000..a533034
+--- /dev/null
++++ b/src/app.ts
+@@ -0,0 +1,33 @@
++import { join } from 'node:path'
++import { Elysia } from 'elysia'
++import { finishResponse } from './core/finishResponse'
++import { loadModules } from './core/loadModules'
++import { renderIndexPage } from './core/pages'
++import { getLoadFailures, getRegisteredModules } from './core/registry'
++
++export const DEFAULT_MODULES_DIR = join(import.meta.dir, 'modules')
++
++export interface MainApp {
++  /** The main Elysia router. Every module is mounted on it. */
++  router: Elysia
++  /** Answer one request. This is what the server (and the tests) call. */
++  fetch: (request: Request) => Promise<Response>
++}
++
++/**
++ * Builds the whole website: the main router, every module from `src/modules`, and the home page.
++ * Nothing here starts a server, so tests can call it freely.
++ */
++export async function createApp(options: { modulesDir?: string } = {}): Promise<MainApp> {
++  const router = new Elysia()
++
++  await loadModules(router, options.modulesDir ?? DEFAULT_MODULES_DIR)
++
++  // The home page. It reads the module list when the page is opened.
++  router.get('/', () => renderIndexPage(getRegisteredModules(router), getLoadFailures(router)))
++
++  return {
++    router,
++    fetch: async (request) => finishResponse(request, await router.handle(request)),
++  }
++}
+diff --git a/src/core/checkModules.ts b/src/core/checkModules.ts
+new file mode 100644
+index 0000000..bb70a6b
+--- /dev/null
++++ b/src/core/checkModules.ts
+@@ -0,0 +1,71 @@
++import { createApp, DEFAULT_MODULES_DIR } from '../app'
++import { getLoadFailures, getRegisteredModules } from './registry'
++import type { RegisteredModule } from './types'
++
++export interface ModuleCheck {
++  folder: string
++  ok: boolean
++  /** Plain-English explanation when `ok` is false. */
++  problem?: string
++}
++
++/**
++ * The sanity check every module has to pass:
++ *   1. the folder loads (right name, index.ts, `export default defineModule(...)`)
++ *   2. opening the module's address (its "/" route) answers 200 and returns HTML
++ *
++ * Used by `bun run sanity` and by the tests, so CI can tell a team what is wrong before
++ * their work is merged.
++ */
++export async function checkModules(
++  modulesDir: string = DEFAULT_MODULES_DIR,
++): Promise<ModuleCheck[]> {
++  const app = await createApp({ modulesDir })
++
++  const results: ModuleCheck[] = getLoadFailures(app.router).map((failure) => ({
++    folder: failure.folder,
++    ok: false,
++    problem: failure.message,
++  }))
++
++  for (const mod of getRegisteredModules(app.router)) {
++    results.push(await checkRootRoute(app.fetch, mod))
++  }
++
++  return results.sort((a, b) => a.folder.localeCompare(b.folder))
++}
++
++async function checkRootRoute(
++  fetch: (request: Request) => Promise<Response>,
++  mod: RegisteredModule,
++): Promise<ModuleCheck> {
++  try {
++    const response = await fetch(new Request(`http://localhost${mod.path}`))
++    const contentType = response.headers.get('content-type') ?? 'nothing'
++
++    if (response.status !== 200) {
++      return {
++        folder: mod.folder,
++        ok: false,
++        problem: `Opening ${mod.path} answered with status ${response.status}, but it must answer 200. Does your router have a route for "/"?`,
++      }
++    }
++
++    if (!contentType.includes('html')) {
++      return {
++        folder: mod.folder,
++        ok: false,
++        problem: `Opening ${mod.path} must return HTML, but it returned "${contentType}". Return a string of HTML from your "/" route.`,
++      }
++    }
++
++    return { folder: mod.folder, ok: true }
++  } catch (error) {
++    const message = error instanceof Error ? error.message : String(error)
++    return {
++      folder: mod.folder,
++      ok: false,
++      problem: `Opening ${mod.path} crashed: ${message}`,
++    }
++  }
++}
+diff --git a/src/core/defineModule.ts b/src/core/defineModule.ts
+new file mode 100644
+index 0000000..c972659
+--- /dev/null
++++ b/src/core/defineModule.ts
+@@ -0,0 +1,37 @@
++import { basename } from 'node:path'
++import type { ModuleDefinition } from './types'
++
++/**
++ * Every module file ends with `export default defineModule({ ... })`.
++ *
++ * It checks that you filled things in correctly and gives a readable error if you did not.
++ * The main app then finds your module by itself, adds your router and puts a button on the
++ * home page. You never have to touch a shared file.
++ */
++export function defineModule(definition: ModuleDefinition): ModuleDefinition {
++  // `Partial` because we are about to check that the module really filled everything in.
++  const { name, description, router } = (definition ?? {}) as Partial<ModuleDefinition>
++
++  if (typeof name !== 'string' || name.trim() === '') {
++    throw new Error(
++      'defineModule needs a "name". It is the text on your button. Example: name: "Module 1: Identity"',
++    )
++  }
++
++  if (!router || typeof router.handle !== 'function') {
++    throw new Error(
++      'defineModule needs a "router". Example: router: new Elysia().get("/", () => "<h1>Hi</h1>")',
++    )
++  }
++
++  return { name: name.trim(), description, router }
++}
++
++/**
++ * Gives you your own web address so you can make links between your pages.
++ * Call it like this at the top of your file: `const base = moduleBase(import.meta.dir)`.
++ * If your folder is called `02-courses`, `base` is `"/02-courses"`.
++ */
++export function moduleBase(dir: string): string {
++  return `/${basename(dir)}`
++}
+diff --git a/src/core/finishResponse.ts b/src/core/finishResponse.ts
+new file mode 100644
+index 0000000..a591dbb
+--- /dev/null
++++ b/src/core/finishResponse.ts
+@@ -0,0 +1,48 @@
++import { renderErrorPage, renderNotFoundPage } from './pages'
++
++const HTML = 'text/html; charset=utf-8'
++
++/**
++ * The last step before a response leaves the server.
++ *
++ * When a route returns a plain string, the browser would show the HTML tags as text, because
++ * the response is labelled `text/plain` (or not labelled at all). This step relabels those
++ * responses as `text/html`, so modules can simply `return "<h1>Hello</h1>"`.
++ *
++ * It also swaps the bare "NOT_FOUND" and crash messages for friendly pages.
++ *
++ * It looks at the finished response, so it works for every module, however that module built
++ * its router. Everything that is labelled as something else (JSON, files, real HTML) and
++ * everything without a body (redirects, 204) is left alone.
++ */
++export async function finishResponse(request: Request, response: Response): Promise<Response> {
++  if (response.body === null) return response
++
++  const contentType = response.headers.get('content-type')?.toLowerCase() ?? ''
++  if (contentType !== '' && !contentType.startsWith('text/plain')) return response
++
++  let body: BodyInit | null = response.body
++
++  const isError = response.status === 404 || response.status >= 500
++  if (isError) {
++    // Read a copy, so the original body is still there if we decide to keep it.
++    const text = await response.clone().text()
++    const path = new URL(request.url).pathname
++
++    if (response.status === 404 && text === 'NOT_FOUND') {
++      body = renderNotFoundPage(path)
++    } else if (response.status >= 500 && !text.trimStart().startsWith('<')) {
++      body = renderErrorPage(path, text)
++    }
++  }
++
++  const headers = new Headers(response.headers)
++  headers.set('content-type', HTML)
++  headers.delete('content-length')
++
++  return new Response(body, {
++    status: response.status,
++    statusText: response.statusText,
++    headers,
++  })
++}
+diff --git a/src/core/loadModules.ts b/src/core/loadModules.ts
+new file mode 100644
+index 0000000..fa546ae
+--- /dev/null
++++ b/src/core/loadModules.ts
+@@ -0,0 +1,68 @@
++import { existsSync, readdirSync } from 'node:fs'
++import { join } from 'node:path'
++import { pathToFileURL } from 'node:url'
++import type { Elysia } from 'elysia'
++import { defineModule } from './defineModule'
++import { recordLoadFailure, registerModule, SAFE_NAME } from './registry'
++import type { RegisteredModule } from './types'
++
++const ENTRY_FILES = ['index.ts', 'index.js']
++
++/**
++ * Looks at every folder inside `src/modules` and plugs each one into the main router.
++ *
++ * - Folders starting with "_" or "." are skipped (that is how `_template` stays hidden).
++ * - The folder name becomes the web address: `src/modules/02-courses` -> `/02-courses`.
++ * - If one module is broken, it is reported on the home page. The other modules keep working.
++ */
++export async function loadModules(app: Elysia, modulesDir: string): Promise<void> {
++  const folders = readdirSync(modulesDir, { withFileTypes: true })
++    .filter((entry) => entry.isDirectory())
++    .map((entry) => entry.name)
++    .filter((name) => !name.startsWith('_') && !name.startsWith('.'))
++    .sort()
++
++  for (const folder of folders) {
++    try {
++      registerModule(app, await loadOne(modulesDir, folder))
++    } catch (error) {
++      const message = describeError(error)
++      recordLoadFailure(app, { folder, message })
++      console.warn(`\n[C3L] Could not load the module in "${folder}":\n${message}\n`)
++    }
++  }
++}
++
++async function loadOne(modulesDir: string, folder: string): Promise<RegisteredModule> {
++  if (!SAFE_NAME.test(folder)) {
++    throw new Error(
++      `The folder name "${folder}" is not allowed. Use only lowercase letters, numbers, "-" and "_" (example: 02-courses).`,
++    )
++  }
++
++  const entry = ENTRY_FILES.map((file) => join(modulesDir, folder, file)).find((file) =>
++    existsSync(file),
++  )
++  if (!entry) {
++    throw new Error(
++      `There is no index.ts inside "${folder}". Every module needs a file called index.ts.`,
++    )
++  }
++
++  const imported = await import(pathToFileURL(entry).href)
++  if (!imported.default) {
++    throw new Error(
++      'index.ts has no default export. The file must contain: export default defineModule({ ... })',
++    )
++  }
++
++  // Check again here, in case someone exported a plain object instead of calling defineModule.
++  const definition = defineModule(imported.default)
++  return { ...definition, path: `/${folder}`, folder }
++}
++
++function describeError(error: unknown): string {
++  if (error instanceof Error) return error.message
++  if (error && typeof error === 'object' && 'message' in error) return String(error.message)
++  return String(error)
++}
+diff --git a/src/core/pages.ts b/src/core/pages.ts
+new file mode 100644
+index 0000000..fdd4bc0
+--- /dev/null
++++ b/src/core/pages.ts
+@@ -0,0 +1,144 @@
++import type { LoadFailure, RegisteredModule } from './types'
++
++/** Makes text safe to put inside HTML, so a name like "<b>" cannot break the page. */
++export function escapeHtml(value: string): string {
++  return value
++    .replaceAll('&', '&amp;')
++    .replaceAll('<', '&lt;')
++    .replaceAll('>', '&gt;')
++    .replaceAll('"', '&quot;')
++    .replaceAll("'", '&#39;')
++}
++
++const STYLE = `
++  :root { color-scheme: light dark; }
++  * { box-sizing: border-box; }
++  body {
++    margin: 0;
++    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
++    line-height: 1.5;
++    background: Canvas;
++    color: CanvasText;
++  }
++  main { max-width: 1040px; margin: 0 auto; padding: 48px 20px 64px; }
++  h1 { margin: 0 0 4px; font-size: 2.2rem; }
++  h2 { margin: 40px 0 12px; font-size: 1.2rem; }
++  .lead { margin: 0 0 32px; opacity: 0.75; }
++  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
++  .card {
++    display: flex;
++    flex-direction: column;
++    gap: 8px;
++    padding: 20px;
++    border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
++    border-radius: 12px;
++    color: inherit;
++    text-decoration: none;
++  }
++  a.card:hover, a.card:focus-visible {
++    border-color: #2563eb;
++    box-shadow: 0 0 0 3px color-mix(in srgb, #2563eb 25%, transparent);
++    outline: none;
++  }
++  .card-name { font-size: 1.1rem; font-weight: 650; }
++  .card-desc { opacity: 0.75; flex: 1; }
++  .card-go {
++    align-self: flex-start;
++    margin-top: 4px;
++    padding: 6px 14px;
++    border-radius: 999px;
++    background: #2563eb;
++    color: #fff;
++    font-size: 0.9rem;
++    font-weight: 600;
++  }
++  .failed { border-color: #dc2626; background: color-mix(in srgb, #dc2626 8%, transparent); }
++  .failed pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 0.85rem; }
++  .empty { padding: 24px; border: 2px dashed color-mix(in srgb, CanvasText 30%, transparent); border-radius: 12px; }
++  code { font-family: ui-monospace, 'Cascadia Code', Menlo, monospace; font-size: 0.9em; }
++  footer { margin-top: 48px; opacity: 0.6; font-size: 0.9rem; }
++`
++
++function layout(title: string, body: string): string {
++  return `<!doctype html>
++<html lang="en">
++  <head>
++    <meta charset="utf-8">
++    <meta name="viewport" content="width=device-width, initial-scale=1">
++    <title>${escapeHtml(title)}</title>
++    <style>${STYLE}</style>
++  </head>
++  <body>
++    <main>${body}</main>
++  </body>
++</html>`
++}
++
++/** The home page: one big fast-click button per module, plus any modules that failed to load. */
++export function renderIndexPage(
++  modules: readonly RegisteredModule[],
++  failures: readonly LoadFailure[],
++): string {
++  const cards = modules
++    .map(
++      (mod) => `
++        <a class="card" href="${escapeHtml(mod.path)}">
++          <span class="card-name">${escapeHtml(mod.name)}</span>
++          ${mod.description ? `<span class="card-desc">${escapeHtml(mod.description)}</span>` : ''}
++          <span class="card-go">Open ${escapeHtml(mod.path)} &rarr;</span>
++        </a>`,
++    )
++    .join('')
++
++  const modulesSection = modules.length
++    ? `<div class="grid">${cards}</div>`
++    : `<div class="empty">
++         <strong>No modules yet.</strong>
++         Copy the folder <code>src/modules/_template</code>, rename the copy, restart the server,
++         and your button shows up here.
++       </div>`
++
++  const failuresSection = failures.length
++    ? `<h2>Modules that could not be loaded</h2>
++       <div class="grid">
++         ${failures
++           .map(
++             (failure) => `
++           <div class="card failed">
++             <span class="card-name">src/modules/${escapeHtml(failure.folder)}</span>
++             <pre>${escapeHtml(failure.message)}</pre>
++             <span>Fix this, save the file and refresh. If the message stays, restart the server.</span>
++           </div>`,
++           )
++           .join('')}
++       </div>`
++    : ''
++
++  return layout(
++    'C3L',
++    `<h1>C3L</h1>
++     <p class="lead">Pick a module to jump straight to its pages.</p>
++     ${modulesSection}
++     ${failuresSection}
++     <footer>Building your module? Work inside your own folder in <code>src/modules</code>. The README explains how.</footer>`,
++  )
++}
++
++export function renderNotFoundPage(path: string): string {
++  return layout(
++    'Page not found',
++    `<h1>404 &ndash; nothing here</h1>
++     <p class="lead">There is no page at <code>${escapeHtml(path)}</code>.</p>
++     <p><a href="/">&larr; Back to the home page</a></p>`,
++  )
++}
++
++export function renderErrorPage(path: string, message: string): string {
++  return layout(
++    'Something broke',
++    `<h1>Something broke</h1>
++     <p class="lead">The page <code>${escapeHtml(path)}</code> crashed. The team that owns it needs to fix this:</p>
++     <div class="card failed"><pre>${escapeHtml(message)}</pre></div>
++     <p><a href="/">&larr; Back to the home page</a></p>`,
++  )
++}
+diff --git a/src/core/registry.ts b/src/core/registry.ts
+new file mode 100644
+index 0000000..fd4d10b
+--- /dev/null
++++ b/src/core/registry.ts
+@@ -0,0 +1,70 @@
++import type { Elysia } from 'elysia'
++import type { LoadFailure, RegisteredModule } from './types'
++
++/** Lowercase letters and numbers, optionally joined by "-" or "_". Example: 02-courses */
++export const SAFE_NAME = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/
++
++/** A module's web address: "/" followed by a safe name. Example: /02-courses */
++const SAFE_PATH = /^\/[a-z0-9]+(?:[-_][a-z0-9]+)*$/
++
++// The home page asks these lists what to show. They are kept per main router.
++const modulesByApp = new WeakMap<object, RegisteredModule[]>()
++const failuresByApp = new WeakMap<object, LoadFailure[]>()
++
++/**
++ * The helper that plugs a module into the main router.
++ *
++ * It does two things:
++ *   1. mounts the module's router under `mod.path`
++ *   2. remembers the module so the home page can show its fast-click button
++ */
++export function registerModule(app: Elysia, mod: RegisteredModule): void {
++  if (!SAFE_PATH.test(mod.path)) {
++    throw new Error(
++      `"${mod.path}" is not a valid web address. Use "/" followed by lowercase letters, numbers, "-" or "_".`,
++    )
++  }
++
++  const modules = getModuleList(app)
++  const clash = modules.find((existing) => existing.path === mod.path)
++  if (clash) {
++    throw new Error(
++      `Two modules want the web address "${mod.path}": "${clash.folder}" and "${mod.folder}". Folder names must be different.`,
++    )
++  }
++
++  // The router is cast because Elysia's `.use()` is stricter about its types than we need.
++  app.group(mod.path, (scope) => scope.use(mod.router as unknown as Elysia))
++  modules.push(mod)
++}
++
++/** Remember a module folder that failed to load so the home page can explain why. */
++export function recordLoadFailure(app: Elysia, failure: LoadFailure): void {
++  getFailureList(app).push(failure)
++}
++
++export function getRegisteredModules(app: Elysia): readonly RegisteredModule[] {
++  return getModuleList(app)
++}
++
++export function getLoadFailures(app: Elysia): readonly LoadFailure[] {
++  return getFailureList(app)
++}
++
++function getModuleList(app: Elysia): RegisteredModule[] {
++  let list = modulesByApp.get(app)
++  if (!list) {
++    list = []
++    modulesByApp.set(app, list)
++  }
++  return list
++}
++
++function getFailureList(app: Elysia): LoadFailure[] {
++  let list = failuresByApp.get(app)
++  if (!list) {
++    list = []
++    failuresByApp.set(app, list)
++  }
++  return list
++}
+diff --git a/src/core/types.ts b/src/core/types.ts
+new file mode 100644
+index 0000000..6f8a045
+--- /dev/null
++++ b/src/core/types.ts
+@@ -0,0 +1,33 @@
++/**
++ * Anything that looks like an Elysia router.
++ *
++ * Elysia's own type is very strict about what it accepts, so we only ask for the one thing
++ * we really need: a `handle` method. Every `new Elysia()` has it.
++ */
++export interface ModuleRouter {
++  handle: (request: Request) => Promise<Response> | Response
++}
++
++/** What a module gives to `defineModule()`. */
++export interface ModuleDefinition {
++  /** The text on your button on the home page. */
++  name: string
++  /** Optional one-liner shown under the button. */
++  description?: string
++  /** Your Elysia router. Routes inside it are relative to `/<your-folder-name>`. */
++  router: ModuleRouter
++}
++
++/** A module after the loader has decided its web address. */
++export interface RegisteredModule extends ModuleDefinition {
++  /** Web address prefix. Always `/<folder-name>`. */
++  path: string
++  /** The folder inside `src/modules` this module lives in. */
++  folder: string
++}
++
++/** A module folder that could not be loaded. It is shown in red on the home page. */
++export interface LoadFailure {
++  folder: string
++  message: string
++}
+diff --git a/src/index.ts b/src/index.ts
+new file mode 100644
+index 0000000..1ae25e7
+--- /dev/null
++++ b/src/index.ts
+@@ -0,0 +1,14 @@
++import { createApp } from './app'
++
++const port = Number(process.env.PORT) || 3000
++const app = await createApp()
++
++try {
++  Bun.serve({ port, fetch: app.fetch })
++} catch {
++  console.error(`\n[C3L] Could not start on port ${port}. Is another copy still running?`)
++  console.error('Close it (Ctrl+C in its terminal) or choose another port with the PORT setting.\n')
++  process.exit(1)
++}
++
++console.log(`\n  C3L is running!  Open  http://localhost:${port}  in your browser.\n`)
+diff --git a/src/modules/01-identity-users/index.ts b/src/modules/01-identity-users/index.ts
+new file mode 100644
+index 0000000..75239c3
+--- /dev/null
++++ b/src/modules/01-identity-users/index.ts
+@@ -0,0 +1,38 @@
++// MODULE 1: Identity & User Management
++//
++// Scope from the project brief:
++//   - User registration
++//   - Login and logout
++//   - Password reset
++//   - User profile management
++//   - Role management (Student, Instructor, Admin)
++//   - Account activation/deactivation
++//
++// HOW TO ADD A PAGE TO THE ROUTER (basic demo):
++//   1. Find the router at the bottom of this file.
++//   2. Copy the  .get('/hello', ...)  line.
++//   3. Change the address ('/hello') and the HTML it returns.
++//   4. Save. Your new page is at  http://localhost:3000/01-identity-users/<your-address>
++import { Elysia } from 'elysia'
++import { defineModule, moduleBase } from '../../core/defineModule'
++
++const base = moduleBase(import.meta.dir)
++
++export default defineModule({
++  name: 'Module 1: Identity & User Management',
++  description: 'Registration, login, password reset, profiles, roles',
++
++  router: new Elysia()
++    // Front page of this module. The button on the home page opens it.
++    .get(
++      '/',
++      () => `
++        <h1>Module 1: Identity &amp; User Management</h1>
++        <p>It works! Replace this page with your own.</p>
++        <p><a href="${base}/hello">Demo page</a></p>
++        <p><a href="/">Back to the home page</a></p>
++      `,
++    )
++    // DEMO: this one line is all it takes to add a page.
++    .get('/hello', () => `<h1>Hello from Module 1</h1><a href="${base}">Back</a>`),
++})
+diff --git a/src/modules/02-courses/index.ts b/src/modules/02-courses/index.ts
+new file mode 100644
+index 0000000..d25df35
+--- /dev/null
++++ b/src/modules/02-courses/index.ts
+@@ -0,0 +1,39 @@
++// MODULE 2: Course Management
++//
++// Scope from the project brief:
++//   - Create courses
++//   - Edit course information
++//   - Course settings
++//   - Course catalog
++//   - Student enrollment
++//   - Instructor assignment to courses
++//   - Archive active/inactive courses
++//
++// HOW TO ADD A PAGE TO THE ROUTER (basic demo):
++//   1. Find the router at the bottom of this file.
++//   2. Copy the  .get('/hello', ...)  line.
++//   3. Change the address ('/hello') and the HTML it returns.
++//   4. Save. Your new page is at  http://localhost:3000/02-courses/<your-address>
++import { Elysia } from 'elysia'
++import { defineModule, moduleBase } from '../../core/defineModule'
++
++const base = moduleBase(import.meta.dir)
++
++export default defineModule({
++  name: 'Module 2: Course Management',
++  description: 'Courses, catalog, enrollment',
++
++  router: new Elysia()
++    // Front page of this module. The button on the home page opens it.
++    .get(
++      '/',
++      () => `
++        <h1>Module 2: Course Management</h1>
++        <p>It works! Replace this page with your own.</p>
++        <p><a href="${base}/hello">Demo page</a></p>
++        <p><a href="/">Back to the home page</a></p>
++      `,
++    )
++    // DEMO: this one line is all it takes to add a page.
++    .get('/hello', () => `<h1>Hello from Module 2</h1><a href="${base}">Back</a>`),
++})
+diff --git a/src/modules/03-content/index.ts b/src/modules/03-content/index.ts
+new file mode 100644
+index 0000000..4edabff
+--- /dev/null
++++ b/src/modules/03-content/index.ts
+@@ -0,0 +1,37 @@
++// MODULE 3: Content Management
++//
++// Scope from the project brief:
++//   - Create modules/units
++//   - Upload learning materials
++//   - Organize content by week or topic
++//   - Content publishing
++//   - Content visibility controls
++//
++// HOW TO ADD A PAGE TO THE ROUTER (basic demo):
++//   1. Find the router at the bottom of this file.
++//   2. Copy the  .get('/hello', ...)  line.
++//   3. Change the address ('/hello') and the HTML it returns.
++//   4. Save. Your new page is at  http://localhost:3000/03-content/<your-address>
++import { Elysia } from 'elysia'
++import { defineModule, moduleBase } from '../../core/defineModule'
++
++const base = moduleBase(import.meta.dir)
++
++export default defineModule({
++  name: 'Module 3: Content Management',
++  description: 'Units, learning materials, publishing',
++
++  router: new Elysia()
++    // Front page of this module. The button on the home page opens it.
++    .get(
++      '/',
++      () => `
++        <h1>Module 3: Content Management</h1>
++        <p>It works! Replace this page with your own.</p>
++        <p><a href="${base}/hello">Demo page</a></p>
++        <p><a href="/">Back to the home page</a></p>
++      `,
++    )
++    // DEMO: this one line is all it takes to add a page.
++    .get('/hello', () => `<h1>Hello from Module 3</h1><a href="${base}">Back</a>`),
++})
+diff --git a/src/modules/04-assignments/index.ts b/src/modules/04-assignments/index.ts
+new file mode 100644
+index 0000000..f8490a4
+--- /dev/null
++++ b/src/modules/04-assignments/index.ts
+@@ -0,0 +1,39 @@
++// MODULE 4: Assignment & Submission System
++//
++// Scope from the project brief:
++//   - Create assignments
++//   - Assignment due dates
++//   - File submission
++//   - Resubmission rules
++//   - Submission history
++//   - Late submission tracking
++//   - Handle accommodations
++//
++// HOW TO ADD A PAGE TO THE ROUTER (basic demo):
++//   1. Find the router at the bottom of this file.
++//   2. Copy the  .get('/hello', ...)  line.
++//   3. Change the address ('/hello') and the HTML it returns.
++//   4. Save. Your new page is at  http://localhost:3000/04-assignments/<your-address>
++import { Elysia } from 'elysia'
++import { defineModule, moduleBase } from '../../core/defineModule'
++
++const base = moduleBase(import.meta.dir)
++
++export default defineModule({
++  name: 'Module 4: Assignment & Submission System',
++  description: 'Assignments, due dates, submissions',
++
++  router: new Elysia()
++    // Front page of this module. The button on the home page opens it.
++    .get(
++      '/',
++      () => `
++        <h1>Module 4: Assignment &amp; Submission System</h1>
++        <p>It works! Replace this page with your own.</p>
++        <p><a href="${base}/hello">Demo page</a></p>
++        <p><a href="/">Back to the home page</a></p>
++      `,
++    )
++    // DEMO: this one line is all it takes to add a page.
++    .get('/hello', () => `<h1>Hello from Module 4</h1><a href="${base}">Back</a>`),
++})
+diff --git a/src/modules/05-quizzes/index.ts b/src/modules/05-quizzes/index.ts
+new file mode 100644
+index 0000000..9d60294
+--- /dev/null
++++ b/src/modules/05-quizzes/index.ts
+@@ -0,0 +1,40 @@
++// MODULE 5: Quiz & Assessment System
++//
++// Scope from the project brief:
++//   - Create quizzes
++//   - Multiple-choice questions
++//   - True/False questions
++//   - Short-answer questions
++//   - Quiz settings
++//   - Quiz attempts
++//   - Automatic grading where applicable
++//   - Handle accommodations
++//
++// HOW TO ADD A PAGE TO THE ROUTER (basic demo):
++//   1. Find the router at the bottom of this file.
++//   2. Copy the  .get('/hello', ...)  line.
++//   3. Change the address ('/hello') and the HTML it returns.
++//   4. Save. Your new page is at  http://localhost:3000/05-quizzes/<your-address>
++import { Elysia } from 'elysia'
++import { defineModule, moduleBase } from '../../core/defineModule'
++
++const base = moduleBase(import.meta.dir)
++
++export default defineModule({
++  name: 'Module 5: Quiz & Assessment System',
++  description: 'Quizzes, questions, attempts, auto-grading',
++
++  router: new Elysia()
++    // Front page of this module. The button on the home page opens it.
++    .get(
++      '/',
++      () => `
++        <h1>Module 5: Quiz &amp; Assessment System</h1>
++        <p>It works! Replace this page with your own.</p>
++        <p><a href="${base}/hello">Demo page</a></p>
++        <p><a href="/">Back to the home page</a></p>
++      `,
++    )
++    // DEMO: this one line is all it takes to add a page.
++    .get('/hello', () => `<h1>Hello from Module 5</h1><a href="${base}">Back</a>`),
++})
+diff --git a/src/modules/06-gradebook/index.ts b/src/modules/06-gradebook/index.ts
+new file mode 100644
+index 0000000..88ffd0e
+--- /dev/null
++++ b/src/modules/06-gradebook/index.ts
+@@ -0,0 +1,39 @@
++// MODULE 6: Gradebook System
++//
++// Scope from the project brief:
++//   - Record grades
++//   - Grade calculations
++//   - Assignment weighting
++//   - Final grade calculation
++//   - Student grade viewing
++//   - Instructor grading dashboard
++//   - Grade reports
++//
++// HOW TO ADD A PAGE TO THE ROUTER (basic demo):
++//   1. Find the router at the bottom of this file.
++//   2. Copy the  .get('/hello', ...)  line.
++//   3. Change the address ('/hello') and the HTML it returns.
++//   4. Save. Your new page is at  http://localhost:3000/06-gradebook/<your-address>
++import { Elysia } from 'elysia'
++import { defineModule, moduleBase } from '../../core/defineModule'
++
++const base = moduleBase(import.meta.dir)
++
++export default defineModule({
++  name: 'Module 6: Gradebook System',
++  description: 'Grades, weighting, reports',
++
++  router: new Elysia()
++    // Front page of this module. The button on the home page opens it.
++    .get(
++      '/',
++      () => `
++        <h1>Module 6: Gradebook System</h1>
++        <p>It works! Replace this page with your own.</p>
++        <p><a href="${base}/hello">Demo page</a></p>
++        <p><a href="/">Back to the home page</a></p>
++      `,
++    )
++    // DEMO: this one line is all it takes to add a page.
++    .get('/hello', () => `<h1>Hello from Module 6</h1><a href="${base}">Back</a>`),
++})
+diff --git a/src/modules/07-forum/index.ts b/src/modules/07-forum/index.ts
+new file mode 100644
+index 0000000..ec91f83
+--- /dev/null
++++ b/src/modules/07-forum/index.ts
+@@ -0,0 +1,38 @@
++// MODULE 7: Discussion Forum System
++//
++// Scope from the project brief:
++//   - Create discussion boards
++//   - Create topics
++//   - Post replies
++//   - Threaded discussions
++//   - Edit/delete posts
++//   - Moderation functionality
++//
++// HOW TO ADD A PAGE TO THE ROUTER (basic demo):
++//   1. Find the router at the bottom of this file.
++//   2. Copy the  .get('/hello', ...)  line.
++//   3. Change the address ('/hello') and the HTML it returns.
++//   4. Save. Your new page is at  http://localhost:3000/07-forum/<your-address>
++import { Elysia } from 'elysia'
++import { defineModule, moduleBase } from '../../core/defineModule'
++
++const base = moduleBase(import.meta.dir)
++
++export default defineModule({
++  name: 'Module 7: Discussion Forum System',
++  description: 'Boards, topics, threaded replies',
++
++  router: new Elysia()
++    // Front page of this module. The button on the home page opens it.
++    .get(
++      '/',
++      () => `
++        <h1>Module 7: Discussion Forum System</h1>
++        <p>It works! Replace this page with your own.</p>
++        <p><a href="${base}/hello">Demo page</a></p>
++        <p><a href="/">Back to the home page</a></p>
++      `,
++    )
++    // DEMO: this one line is all it takes to add a page.
++    .get('/hello', () => `<h1>Hello from Module 7</h1><a href="${base}">Back</a>`),
++})
+diff --git a/src/modules/08-notifications/index.ts b/src/modules/08-notifications/index.ts
+new file mode 100644
+index 0000000..edb95d3
+--- /dev/null
++++ b/src/modules/08-notifications/index.ts
+@@ -0,0 +1,38 @@
++// MODULE 8: Notifications & Messaging
++//
++// Scope from the project brief:
++//   - Course announcements
++//   - In-app notifications
++//   - Direct messaging
++//   - Assignment reminders
++//   - Quiz reminders
++//   - Notification preferences
++//
++// HOW TO ADD A PAGE TO THE ROUTER (basic demo):
++//   1. Find the router at the bottom of this file.
++//   2. Copy the  .get('/hello', ...)  line.
++//   3. Change the address ('/hello') and the HTML it returns.
++//   4. Save. Your new page is at  http://localhost:3000/08-notifications/<your-address>
++import { Elysia } from 'elysia'
++import { defineModule, moduleBase } from '../../core/defineModule'
++
++const base = moduleBase(import.meta.dir)
++
++export default defineModule({
++  name: 'Module 8: Notifications & Messaging',
++  description: 'Announcements, notifications, messages',
++
++  router: new Elysia()
++    // Front page of this module. The button on the home page opens it.
++    .get(
++      '/',
++      () => `
++        <h1>Module 8: Notifications &amp; Messaging</h1>
++        <p>It works! Replace this page with your own.</p>
++        <p><a href="${base}/hello">Demo page</a></p>
++        <p><a href="/">Back to the home page</a></p>
++      `,
++    )
++    // DEMO: this one line is all it takes to add a page.
++    .get('/hello', () => `<h1>Hello from Module 8</h1><a href="${base}">Back</a>`),
++})
+diff --git a/src/modules/09-analytics/index.ts b/src/modules/09-analytics/index.ts
+new file mode 100644
+index 0000000..72e299f
+--- /dev/null
++++ b/src/modules/09-analytics/index.ts
+@@ -0,0 +1,38 @@
++// MODULE 9: Analytics & Reporting
++//
++// Scope from the project brief:
++//   - Student activity statistics
++//   - Course participation reports
++//   - Assignment completion statistics
++//   - Quiz performance reports
++//   - Instructor dashboard
++//   - Administrative dashboard
++//
++// HOW TO ADD A PAGE TO THE ROUTER (basic demo):
++//   1. Find the router at the bottom of this file.
++//   2. Copy the  .get('/hello', ...)  line.
++//   3. Change the address ('/hello') and the HTML it returns.
++//   4. Save. Your new page is at  http://localhost:3000/09-analytics/<your-address>
++import { Elysia } from 'elysia'
++import { defineModule, moduleBase } from '../../core/defineModule'
++
++const base = moduleBase(import.meta.dir)
++
++export default defineModule({
++  name: 'Module 9: Analytics & Reporting',
++  description: 'Statistics, reports, dashboards',
++
++  router: new Elysia()
++    // Front page of this module. The button on the home page opens it.
++    .get(
++      '/',
++      () => `
++        <h1>Module 9: Analytics &amp; Reporting</h1>
++        <p>It works! Replace this page with your own.</p>
++        <p><a href="${base}/hello">Demo page</a></p>
++        <p><a href="/">Back to the home page</a></p>
++      `,
++    )
++    // DEMO: this one line is all it takes to add a page.
++    .get('/hello', () => `<h1>Hello from Module 9</h1><a href="${base}">Back</a>`),
++})
+diff --git a/src/modules/10-attendance/index.ts b/src/modules/10-attendance/index.ts
+new file mode 100644
+index 0000000..bed85d1
+--- /dev/null
++++ b/src/modules/10-attendance/index.ts
+@@ -0,0 +1,38 @@
++// MODULE 10: Attendance & Participation Tracking
++//
++// Scope from the project brief:
++//   - Record attendance
++//   - Attendance history
++//   - Excused/unexcused absences
++//   - Participation tracking
++//   - Attendance reports
++//   - Attendance statistics
++//
++// HOW TO ADD A PAGE TO THE ROUTER (basic demo):
++//   1. Find the router at the bottom of this file.
++//   2. Copy the  .get('/hello', ...)  line.
++//   3. Change the address ('/hello') and the HTML it returns.
++//   4. Save. Your new page is at  http://localhost:3000/10-attendance/<your-address>
++import { Elysia } from 'elysia'
++import { defineModule, moduleBase } from '../../core/defineModule'
++
++const base = moduleBase(import.meta.dir)
++
++export default defineModule({
++  name: 'Module 10: Attendance & Participation Tracking',
++  description: 'Attendance, absences, participation',
++
++  router: new Elysia()
++    // Front page of this module. The button on the home page opens it.
++    .get(
++      '/',
++      () => `
++        <h1>Module 10: Attendance &amp; Participation Tracking</h1>
++        <p>It works! Replace this page with your own.</p>
++        <p><a href="${base}/hello">Demo page</a></p>
++        <p><a href="/">Back to the home page</a></p>
++      `,
++    )
++    // DEMO: this one line is all it takes to add a page.
++    .get('/hello', () => `<h1>Hello from Module 10</h1><a href="${base}">Back</a>`),
++})
+diff --git a/src/modules/11-calendar/index.ts b/src/modules/11-calendar/index.ts
+new file mode 100644
+index 0000000..3f97bec
+--- /dev/null
++++ b/src/modules/11-calendar/index.ts
+@@ -0,0 +1,38 @@
++// MODULE 11: Calendar & Scheduling
++//
++// Scope from the project brief:
++//   - Course calendar
++//   - Assignment deadlines
++//   - Quiz schedules
++//   - Event creation
++//   - Upcoming events dashboard
++//   - Calendar views (day/week/month)
++//
++// HOW TO ADD A PAGE TO THE ROUTER (basic demo):
++//   1. Find the router at the bottom of this file.
++//   2. Copy the  .get('/hello', ...)  line.
++//   3. Change the address ('/hello') and the HTML it returns.
++//   4. Save. Your new page is at  http://localhost:3000/11-calendar/<your-address>
++import { Elysia } from 'elysia'
++import { defineModule, moduleBase } from '../../core/defineModule'
++
++const base = moduleBase(import.meta.dir)
++
++export default defineModule({
++  name: 'Module 11: Calendar & Scheduling',
++  description: 'Calendar, deadlines, events',
++
++  router: new Elysia()
++    // Front page of this module. The button on the home page opens it.
++    .get(
++      '/',
++      () => `
++        <h1>Module 11: Calendar &amp; Scheduling</h1>
++        <p>It works! Replace this page with your own.</p>
++        <p><a href="${base}/hello">Demo page</a></p>
++        <p><a href="/">Back to the home page</a></p>
++      `,
++    )
++    // DEMO: this one line is all it takes to add a page.
++    .get('/hello', () => `<h1>Hello from Module 11</h1><a href="${base}">Back</a>`),
++})
+diff --git a/src/modules/12-dashboard/index.ts b/src/modules/12-dashboard/index.ts
+new file mode 100644
+index 0000000..c7de05e
+--- /dev/null
++++ b/src/modules/12-dashboard/index.ts
+@@ -0,0 +1,38 @@
++// MODULE 12: Student Dashboard
++//
++// Scope from the project brief:
++//   - Enrolled courses
++//   - Upcoming deadlines
++//   - Recent grades
++//   - Notifications summary
++//   - Course activity feed
++//   - Personalized welcome page
++//
++// HOW TO ADD A PAGE TO THE ROUTER (basic demo):
++//   1. Find the router at the bottom of this file.
++//   2. Copy the  .get('/hello', ...)  line.
++//   3. Change the address ('/hello') and the HTML it returns.
++//   4. Save. Your new page is at  http://localhost:3000/12-dashboard/<your-address>
++import { Elysia } from 'elysia'
++import { defineModule, moduleBase } from '../../core/defineModule'
++
++const base = moduleBase(import.meta.dir)
++
++export default defineModule({
++  name: 'Module 12: Student Dashboard',
++  description: 'Courses, deadlines, grades at a glance',
++
++  router: new Elysia()
++    // Front page of this module. The button on the home page opens it.
++    .get(
++      '/',
++      () => `
++        <h1>Module 12: Student Dashboard</h1>
++        <p>It works! Replace this page with your own.</p>
++        <p><a href="${base}/hello">Demo page</a></p>
++        <p><a href="/">Back to the home page</a></p>
++      `,
++    )
++    // DEMO: this one line is all it takes to add a page.
++    .get('/hello', () => `<h1>Hello from Module 12</h1><a href="${base}">Back</a>`),
++})
+diff --git a/src/modules/_template/index.test.ts b/src/modules/_template/index.test.ts
+new file mode 100644
+index 0000000..32c3ef9
+--- /dev/null
++++ b/src/modules/_template/index.test.ts
+@@ -0,0 +1,18 @@
++// A tiny unit test for this module. Run every test with:  bun run test
++// When you copy the template this file comes with it. Change the checks to match your pages.
++import { expect, test } from 'bun:test'
++import mod from './index'
++
++// A module's router can be tested on its own. Its addresses start at "/" (no folder name).
++const get = (path: string) => mod.router.handle(new Request(`http://localhost${path}`))
++
++test('the front page answers 200', async () => {
++  const response = await get('/')
++  expect(response.status).toBe(200)
++  expect(await response.text()).toContain('Hello from my module')
++})
++
++test('the second page answers 200', async () => {
++  const response = await get('/second-page')
++  expect(response.status).toBe(200)
++})
+diff --git a/src/modules/_template/index.ts b/src/modules/_template/index.ts
+new file mode 100644
+index 0000000..d0cd397
+--- /dev/null
++++ b/src/modules/_template/index.ts
+@@ -0,0 +1,61 @@
++// =====================================================================
++//  MODULE TEMPLATE  -  copy this whole folder, then rename the copy!
++//
++//  The 12 LMS modules already have their own folders. Use this template only when you
++//  need an extra folder (for example to try something out).
++//
++//  1. Copy the folder  src/modules/_template
++//  2. Rename the copy: lowercase, no spaces. Example: 13-my-experiment
++//     The folder name becomes the web address:  http://localhost:3000/13-my-experiment
++//  3. Change `name` below. It is the text on the button on the home page.
++//  4. Add pages in the router. Each page just returns a string of HTML.
++//
++//  Only change files inside YOUR folder. Never edit src/core or other modules.
++// =====================================================================
++import { Elysia } from 'elysia'
++import { defineModule, moduleBase } from '../../core/defineModule'
++
++// Your web address, for example "/13-my-experiment". Use it to make links between your pages.
++const base = moduleBase(import.meta.dir)
++
++export default defineModule({
++  name: 'My Module Name',
++  description: 'One sentence about what this module does (you can delete this line)',
++
++  router: new Elysia()
++    // This is the front page. The button on the home page opens it.
++    .get(
++      '/',
++      () => `
++        <!doctype html>
++        <html>
++          <head>
++            <meta charset="utf-8">
++            <title>My Module</title>
++          </head>
++          <body>
++            <h1>Hello from my module!</h1>
++            <p><a href="${base}/second-page">Go to my second page</a></p>
++            <p><a href="/">Back to the home page</a></p>
++          </body>
++        </html>
++      `,
++    )
++    // Another page. It lives at  /<your-folder>/second-page
++    .get('/second-page', () => `<h1>My second page</h1><a href="${base}">Back to my front page</a>`),
++
++  // ---- Later: a form that sends data to your router (POST) -------------------------------
++  // Add `t` to the import at the top:  import { Elysia, t } from 'elysia'
++  // Then add these routes to the router above, right after the '/second-page' line.
++  // Each one starts with a dot, just like the routes that are already there:
++  //
++  //   .get('/form', () => `<form method="post" action="${base}/form">
++  //                          <input name="email"> <button>Send</button>
++  //                        </form>`)
++  //   .post('/form', ({ body }) => `<p>You sent: ${escapeHtml(body.email)}</p>`, {
++  //     body: t.Object({ email: t.String() }),
++  //   })
++  //
++  // `escapeHtml` comes from:  import { escapeHtml } from '../../core/pages'
++  // It stops people from sneaking HTML into your page. More in the Elysia docs: elysiajs.com
++})
+diff --git a/tests/app.test.ts b/tests/app.test.ts
+new file mode 100644
+index 0000000..e0d000a
+--- /dev/null
++++ b/tests/app.test.ts
+@@ -0,0 +1,242 @@
++import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
++import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { pathToFileURL } from 'node:url'
++import { Elysia } from 'elysia'
++import { createApp, type MainApp } from '../src/app'
++import { checkModules } from '../src/core/checkModules'
++import { defineModule } from '../src/core/defineModule'
++import { finishResponse } from '../src/core/finishResponse'
++import { getLoadFailures, getRegisteredModules, registerModule } from '../src/core/registry'
++
++// The 12 modules from the project brief. Their folder names are their web addresses,
++// so renaming or deleting one would break links for everybody.
++const EXPECTED_MODULE_FOLDERS = [
++  '01-identity-users',
++  '02-courses',
++  '03-content',
++  '04-assignments',
++  '05-quizzes',
++  '06-gradebook',
++  '07-forum',
++  '08-notifications',
++  '09-analytics',
++  '10-attendance',
++  '11-calendar',
++  '12-dashboard',
++]
++
++// Test modules are written into a temporary folder inside the repo (so they can find "elysia").
++// The folder is deleted again when the tests finish.
++const TMP = join(import.meta.dir, `.tmp-modules-${process.pid}`)
++const DEFINE_MODULE_URL = pathToFileURL(join(import.meta.dir, '../src/core/defineModule.ts')).href
++
++function writeModule(root: string, folder: string, source: string): void {
++  mkdirSync(join(root, folder), { recursive: true })
++  writeFileSync(join(root, folder, 'index.ts'), source)
++}
++
++/** Source code for a small, healthy module whose "/" route returns `body`. */
++function healthyModule(name: string, body: string): string {
++  return `
++    import { Elysia } from 'elysia'
++    import { defineModule } from '${DEFINE_MODULE_URL}'
++    export default defineModule({
++      name: ${JSON.stringify(name)},
++      router: new Elysia().get('/', () => ${JSON.stringify(body)}),
++    })
++  `
++}
++
++const get = (app: MainApp, path: string) => app.fetch(new Request(`http://localhost${path}`))
++
++afterAll(() => rmSync(TMP, { recursive: true, force: true }))
++
++describe('the real modules in src/modules', () => {
++  test('all 12 module folders from the brief exist and load', async () => {
++    const app = await createApp()
++    const loaded = getRegisteredModules(app.router).map((mod) => mod.folder)
++    for (const folder of EXPECTED_MODULE_FOLDERS) {
++      expect(loaded).toContain(folder)
++    }
++  })
++
++  test('every module loads and its front page answers 200 with HTML', async () => {
++    const results = await checkModules()
++    expect(results.filter((result) => !result.ok)).toEqual([])
++  })
++
++  test('the _template module works, so copies of it work too', async () => {
++    const template = (await import('../src/modules/_template/index')).default
++    const app = new Elysia()
++    registerModule(app, { ...template, folder: 'template-copy', path: '/template-copy' })
++
++    const request = new Request('http://localhost/template-copy')
++    const response = await finishResponse(request, await app.handle(request))
++
++    expect(response.status).toBe(200)
++    expect(response.headers.get('content-type')).toContain('text/html')
++  })
++})
++
++describe('main app with healthy modules', () => {
++  const root = join(TMP, 'healthy')
++  let app: MainApp
++
++  beforeAll(async () => {
++    writeModule(root, 'alpha', healthyModule('Alpha Team', '<h1>Alpha front page</h1>'))
++    writeModule(root, 'beta', healthyModule('Beta <Team>', '<h1>Beta front page</h1>'))
++    app = await createApp({ modulesDir: root })
++  })
++
++  test('each module gets a fast-click button on the home page', async () => {
++    const response = await get(app, '/')
++    const html = await response.text()
++
++    expect(response.status).toBe(200)
++    expect(response.headers.get('content-type')).toContain('text/html')
++    expect(html).toContain('href="/alpha"')
++    expect(html).toContain('href="/beta"')
++    expect(html).toContain('Alpha Team')
++  })
++
++  test('module names are escaped, so they cannot break the home page', async () => {
++    const html = await (await get(app, '/')).text()
++    expect(html).toContain('Beta &lt;Team&gt;')
++    expect(html).not.toContain('Beta <Team>')
++  })
++
++  test('a string returned by a module is served as HTML', async () => {
++    const response = await get(app, '/alpha')
++    expect(response.status).toBe(200)
++    expect(response.headers.get('content-type')).toContain('text/html')
++    expect(await response.text()).toContain('<h1>Alpha front page</h1>')
++  })
++
++  test('an unknown address gives a friendly 404 page', async () => {
++    const response = await get(app, '/does-not-exist')
++    expect(response.status).toBe(404)
++    expect(response.headers.get('content-type')).toContain('text/html')
++    expect(await response.text()).toContain('Back to the home page')
++  })
++})
++
++describe('main app with broken modules', () => {
++  const root = join(TMP, 'broken')
++  let app: MainApp
++
++  beforeAll(async () => {
++    writeModule(root, 'good', healthyModule('Good Module', '<h1>I still work</h1>'))
++    writeModule(root, '_hidden', healthyModule('Hidden', '<h1>hidden</h1>'))
++    writeModule(root, 'broken-syntax', 'export default defineModule({ name: "x", router: ')
++    writeModule(root, 'no-default', 'export const nothing = 1')
++    writeModule(
++      root,
++      'bad-router',
++      `import { defineModule } from '${DEFINE_MODULE_URL}'
++       export default defineModule({ name: 'Bad', router: 'not a router' })`,
++    )
++    writeModule(root, 'Bad Name', healthyModule('Bad Name', '<h1>x</h1>'))
++    mkdirSync(join(root, 'no-index'), { recursive: true })
++    writeFileSync(join(root, 'no-index', 'notes.txt'), 'there is no index.ts here')
++
++    app = await createApp({ modulesDir: root })
++  })
++
++  test('one broken module does not stop the others', async () => {
++    expect(getRegisteredModules(app.router).map((mod) => mod.folder)).toEqual(['good'])
++
++    const response = await get(app, '/good')
++    expect(response.status).toBe(200)
++    expect(await response.text()).toContain('I still work')
++  })
++
++  test('every broken folder is reported, and folders starting with _ are skipped', () => {
++    const failed = getLoadFailures(app.router)
++      .map((failure) => failure.folder)
++      .sort()
++    expect(failed).toEqual(['Bad Name', 'bad-router', 'broken-syntax', 'no-default', 'no-index'])
++  })
++
++  test('the home page explains what went wrong', async () => {
++    const html = await (await get(app, '/')).text()
++    expect(html).toContain('Modules that could not be loaded')
++    expect(html).toContain('src/modules/no-default')
++    expect(html).toContain('no default export')
++    expect(html).not.toContain('Hidden')
++  })
++})
++
++describe('the sanity check', () => {
++  const root = join(TMP, 'sanity')
++
++  test('flags a module whose front page is missing or is not HTML', async () => {
++    writeModule(root, 'fine', healthyModule('Fine', '<h1>ok</h1>'))
++    writeModule(
++      root,
++      'json-front',
++      `import { Elysia } from 'elysia'
++       import { defineModule } from '${DEFINE_MODULE_URL}'
++       export default defineModule({ name: 'Json', router: new Elysia().get('/', () => ({ a: 1 })) })`,
++    )
++    writeModule(
++      root,
++      'no-front',
++      `import { Elysia } from 'elysia'
++       import { defineModule } from '${DEFINE_MODULE_URL}'
++       export default defineModule({ name: 'None', router: new Elysia().get('/other', () => 'hi') })`,
++    )
++
++    const results = await checkModules(root)
++    const byFolder = Object.fromEntries(results.map((result) => [result.folder, result]))
++
++    expect(byFolder.fine?.ok).toBe(true)
++    expect(byFolder['json-front']?.ok).toBe(false)
++    expect(byFolder['json-front']?.problem).toContain('HTML')
++    expect(byFolder['no-front']?.ok).toBe(false)
++    expect(byFolder['no-front']?.problem).toContain('404')
++  })
++})
++
++describe('registerModule and defineModule', () => {
++  test('two modules cannot share a web address', () => {
++    const app = new Elysia()
++    const mod = {
++      name: 'A',
++      folder: 'a',
++      path: '/a',
++      router: new Elysia().get('/', () => 'x'),
++    }
++
++    registerModule(app, mod)
++    expect(() => registerModule(app, { ...mod, folder: 'other' })).toThrow('/a')
++  })
++
++  test('defineModule explains a missing name or router', () => {
++    expect(() => defineModule({ name: '   ', router: new Elysia() })).toThrow('name')
++    expect(() => defineModule({ name: 'Ok', router: 'nope' as never })).toThrow('router')
++  })
++})
++
++describe('finishResponse', () => {
++  test('leaves JSON alone', async () => {
++    const app = new Elysia().get('/data', () => ({ ok: true }))
++    const request = new Request('http://localhost/data')
++    const response = await finishResponse(request, await app.handle(request))
++
++    expect(response.headers.get('content-type')).toContain('json')
++    expect(await response.json()).toEqual({ ok: true })
++  })
++
++  test('shows a friendly page when a route crashes', async () => {
++    const app = new Elysia().get('/boom', () => {
++      throw new Error('kaboom')
++    })
++    const request = new Request('http://localhost/boom')
++    const response = await finishResponse(request, await app.handle(request))
++
++    expect(response.status).toBe(500)
++    expect(response.headers.get('content-type')).toContain('text/html')
++    expect(await response.text()).toContain('kaboom')
++  })
++})
+diff --git a/tsconfig.json b/tsconfig.json
+new file mode 100644
+index 0000000..4452758
+--- /dev/null
++++ b/tsconfig.json
+@@ -0,0 +1,17 @@
++{
++  "compilerOptions": {
++    "target": "ESNext",
++    "lib": ["ESNext"],
++    "module": "ESNext",
++    "moduleResolution": "bundler",
++    "types": ["bun"],
++    "strict": true,
++    "noEmit": true,
++    "skipLibCheck": true,
++    "esModuleInterop": true,
++    "isolatedModules": true,
++    "resolveJsonModule": true
++  },
++  "include": ["src", "tests", "scripts"],
++  "exclude": ["node_modules", "tests/.tmp-*"]
++}
+-- 
+2.43.0
+
