@@ -31,10 +31,18 @@ module only**. Four human **admins** review and approve every pull request into 
    found so they can tell that team.
 4. **Never rename or delete a module folder.** The folder name is the public URL and a test checks all
    12 exist.
-5. **Never push to `main`.** Work on a `feature/<what-you-do>` branch, commit with meaningful messages
-   (imperative, specific: "Add enrollment form to course page"), push the branch, open a pull request
-   using `.github/pull_request_template.md`. Admins approve.
+5. **Follow the fork workflow (section 3).** Each team works in its own **fork**: `origin` is the
+   fork, `upstream` is the class repository `JGreyScales/C3L`. Work on a `feature/<what-you-do>`
+   branch, commit with meaningful messages (imperative, specific: "Add enrollment form to course
+   page"), push it to `origin`, and open a pull request **into the fork's `main`** for a teammate to
+   review. Never commit straight to `main`. When the team's `main` is ready, it goes to the class
+   repository as a pull request from the fork's `main` to `upstream` `main`, and four human admins
+   approve it. You cannot and must not push to `upstream`.
 6. **Stage only the module folder**: `git add src/modules/<folder>`, not `git add .` or `git add -A`.
+   Never run history-rewriting or destructive Git commands (`git push --force`, `git reset --hard`,
+   `git rebase`, `git clean -fd`, `git checkout .`), and never use the "Discard commits" button in
+   GitHub's Sync fork box, unless an admin explicitly tells the human to. To bring in upstream
+   changes use `git merge`, never `git rebase`.
 7. **Do not add dependencies** (`bun add`) without the human confirming an admin agreed.
 8. **No secrets** (passwords, tokens, keys) in code or commits.
 9. **Use Bun, not Node tooling.** Commands are `bun run ...`. Do not suggest `npm`, `pnpm` or `yarn`.
@@ -45,7 +53,60 @@ module only**. Four human **admins** review and approve every pull request into 
 
 ---
 
-## 3. How it works
+## 3. Git model: forks, `origin` and `upstream`
+
+Every team has **one fork** of `JGreyScales/C3L`. One person (the "fork owner") makes it and invites
+the teammates as collaborators on the fork. Everyone clones the **fork** and then adds the class
+repository as a second remote.
+
+| Remote     | Points to                           | Can the team push? |
+|------------|-------------------------------------|--------------------|
+| `origin`   | the team's fork, `<fork-owner>/C3L` | yes                |
+| `upstream` | the class repo, `JGreyScales/C3L`   | **no**             |
+
+Check with `git remote -v`. If `origin` points at `JGreyScales`, the human cloned the wrong
+repository. Fix: `git remote rename origin upstream`, then `git remote add origin <fork-url>`.
+If `upstream` is missing: `git remote add upstream https://github.com/JGreyScales/C3L.git`.
+
+**There are two pull-request loops. Always confirm the base repository before a PR is created.**
+
+1. **Inside the team.** `feature/<name>` branch, pushed to `origin`, pull request whose **base is the
+   fork** (`<fork-owner>/C3L`, `main`), reviewed by a teammate, then merged. The fork's `main` is the
+   team's integration branch. GitHub pre-selects `upstream` as the base for pull requests opened from
+   a fork, so the human has to switch the base repository to the fork. This is the most common
+   mistake.
+2. **To the class repository.** When the fork's `main` is ready and synced, open a pull request whose
+   **base is `JGreyScales/C3L` `main`** and whose **head is the fork's `main`**. Four human admins
+   review it. It keeps following the fork's `main`, so fixes go in through loop 1. After it is merged,
+   sync again. Admins merge with a **merge commit** (never squash or rebase) so forks stay in step.
+
+**Syncing the fork with `upstream`.** Do it before starting work each day, before opening the
+upstream pull request, and whenever an admin says the branch is out of date. Always merge:
+
+```
+git checkout main
+git fetch upstream
+git merge upstream/main      # an editor may open for the merge message: save and close it
+git push origin main
+git checkout feature/<name>  # then bring the new main into a feature branch:
+git merge main
+```
+
+The GitHub button **Sync fork > Update branch** does the same for the fork's `main`. If GitHub offers
+only **Discard commits**, do not click it; use the commands.
+
+**Conflicts.** `git status` lists the files. Open each one, resolve the `<<<<<<<` / `=======` /
+`>>>>>>>` blocks, `git add <file>`, `git commit`, then `bun run check`. A conflict in a file outside
+the module's folder means something is wrong: stop and tell the human to ask an admin.
+`git merge --abort` backs out safely.
+
+**CI and forks.** The workflow runs for pull requests from forks. On a team's first pull request to
+`upstream`, an admin has to click **Approve and run workflows**. Forks have Actions switched off
+until the fork owner enables them, which also gives the team checks on its internal pull requests.
+
+---
+
+## 4. How it works
 
 ```
 bun run dev
@@ -114,7 +175,7 @@ served as HTML, so real plain text needs a different content type.
 
 ---
 
-## 4. The 12 modules
+## 5. The 12 modules
 
 | #  | Folder              | Module                          | Scope from the project brief |
 |----|---------------------|---------------------------------|------------------------------|
@@ -141,7 +202,7 @@ principles. Help the student meet these without over-engineering.
 
 ---
 
-## 5. Recipes
+## 6. Recipes
 
 ### Add a page
 Add one chained ``.get('/path', () => `<html string>`)`` to the module's router. Note the chain:
@@ -201,7 +262,7 @@ Copy `src/modules/_template`, rename the copy (valid folder name, see above), re
 
 ---
 
-## 6. Commands
+## 7. Commands
 
 | Command                | What it does |
 |------------------------|--------------|
@@ -218,18 +279,19 @@ Copy `src/modules/_template`, rename the copy (valid folder name, see above), re
 
 ---
 
-## 7. CI and branch protection
+## 8. CI and branch protection
 
 `.github/workflows/ci.yml` runs on pull requests and pushes to `main`, one job per check:
 **Lint**, **Type check**, **Tests**, **Module sanity check** (all blocking), and
 **Formatting (advice only)** (non-blocking). The sanity script prints GitHub `::error` annotations
 pointing at the broken module folder. `main` is meant to be protected: pull request required, an
-admin approval required (`.github/CODEOWNERS`), checks must pass. An AI cannot and should not work
-around this.
+admin approval required (`.github/CODEOWNERS`), checks must pass, merge commits only. An AI cannot
+and should not work around this. Teams have read-only access to `upstream`, which is why all their
+work arrives through pull requests from forks (section 3).
 
 ---
 
-## 8. Repo map
+## 9. Repo map
 
 ```
 src/index.ts                  server entry (Bun.serve)
@@ -250,7 +312,7 @@ scripts/check-modules.ts      `bun run sanity`
 
 ---
 
-## 9. Common mistakes (check for these first when something is broken)
+## 10. Common mistakes (check for these first when something is broken)
 
 - No `export default defineModule({...})` (or a named export instead of default).
 - Missing `GET /` route, or a `/` route that returns JSON. The module's button needs HTML at `/`.
@@ -259,13 +321,18 @@ scripts/check-modules.ts      `bun run sanity`
 - Folder name with uppercase letters, spaces or dots (not loadable).
 - Edited a file outside the module folder (admins will reject the pull request).
 - Expecting a new folder to appear without restarting `bun run dev`.
+- Opening a pull request against the wrong base repository (GitHub defaults to `upstream` for
+  pull requests made from a fork), or cloning `JGreyScales/C3L` instead of the team's fork.
+- Not syncing the fork before sending work upstream (the pull request then shows other teams' files).
+- "Fixing" a sync problem with `git rebase`, `git push --force`, `git reset --hard` or the
+  **Discard commits** button. Use `git merge upstream/main` and ask an admin if it gets messy.
 - Putting raw user input into HTML without `escapeHtml`.
 - Using Node-only assumptions or `npm`; this repo runs on Bun.
 - Adding a heavy framework or state-management layer to a beginner module. Keep it simple.
 
 ---
 
-## 10. When unsure
+## 11. When unsure
 
 Ask the human. Prefer the smallest change that works, inside their folder, and explain it. If a
 request would require changing shared files, say so and suggest they ask an admin.
