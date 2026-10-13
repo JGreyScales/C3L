@@ -8,7 +8,7 @@ import { ROLES } from './roles'
 const BASE = '/01-identity-users'
 
 interface Operation {
-  parameters?: { name: string; in: string }[]
+  parameters?: { name: string; in: string; required: boolean; schema: { type: string } }[]
   requestBody?: {
     content: {
       'application/json': {
@@ -52,9 +52,8 @@ describe('the OpenAPI description', () => {
   })
 
   test('a body lists all its fields as required, and the role choices match the real roles', () => {
-    const schema = paths[`${BASE}/api/users/{id}/role`]?.put?.requestBody?.content[
-      'application/json'
-    ].schema
+    const schema =
+      paths[`${BASE}/api/users/{id}/role`]?.put?.requestBody?.content['application/json'].schema
     expect(schema?.required).toEqual(['role'])
     expect(schema?.properties.role?.enum).toEqual([...ROLES])
   })

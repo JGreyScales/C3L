@@ -102,95 +102,97 @@ export function createRouter(options: AuthOptions) {
     return { user }
   }
 
-  return new Elysia()
-    // Front page of this module. The button on the home page opens it.
-    .get('/', () => renderFrontPage(options.mountPath))
+  return (
+    new Elysia()
+      // Front page of this module. The button on the home page opens it.
+      .get('/', () => renderFrontPage(options.mountPath))
 
-    // Swagger UI, and the description of the endpoints it shows (made from endpoints.ts).
-    .get('/docs', () => renderDocsPage(options.mountPath))
-    .get('/openapi.json', () => json(200, buildOpenApi(options.mountPath)))
+      // Swagger UI, and the description of the endpoints it shows (made from endpoints.ts).
+      .get('/docs', () => renderDocsPage(options.mountPath))
+      .get('/openapi.json', () => json(200, buildOpenApi(options.mountPath)))
 
-    // Everything under /api/auth/ is answered by Better Auth.
-    .all('/api/auth/*', ({ request }) => getAuth().handler(request), rawBody)
+      // Everything under /api/auth/ is answered by Better Auth.
+      .all('/api/auth/*', ({ request }) => getAuth().handler(request), rawBody)
 
-    .get('/api/me', async ({ request }) => {
-      const user = await currentUser(request)
-      return user ? json(200, { user }) : json(401, { error: 'Not signed in.' })
-    })
+      .get('/api/me', async ({ request }) => {
+        const user = await currentUser(request)
+        return user ? json(200, { user }) : json(401, { error: 'Not signed in.' })
+      })
 
-    .patch(
-      '/api/me',
-      async ({ request }) => {
+      .patch(
+        '/api/me',
+        async ({ request }) => {
+          const check = await gate(request)
+          if ('fail' in check) return check.fail
+
+          const { name } = await readJson(request)
+          if (typeof name !== 'string' || name.trim() === '' || name.trim().length > 100) {
+            return json(400, { error: '"name" must be between 1 and 100 characters.' })
+          }
+          const user = await changeUser(check.user.id, { name: name.trim() })
+          return user ? json(200, { user }) : json(404, { error: 'No such user.' })
+        },
+        rawBody,
+      )
+
+      .get('/api/users', async ({ request }) => {
+        const check = await gate(request, 'admin')
+        if ('fail' in check) return check.fail
+
+        const { internalAdapter } = await getAuth().$context
+        const rows = await internalAdapter.listUsers()
+        return json(200, { users: rows.map((row) => toUserInfo(row)) })
+      })
+
+      .get('/api/users/:id', async ({ request, params }) => {
         const check = await gate(request)
         if ('fail' in check) return check.fail
 
-        const { name } = await readJson(request)
-        if (typeof name !== 'string' || name.trim() === '' || name.trim().length > 100) {
-          return json(400, { error: '"name" must be between 1 and 100 characters.' })
-        }
-        const user = await changeUser(check.user.id, { name: name.trim() })
-        return user ? json(200, { user }) : json(404, { error: 'No such user.' })
-      },
-      rawBody,
-    )
+        const row = await findUser(params.id)
+        if (!row) return json(404, { error: 'No such user.' })
 
-    .get('/api/users', async ({ request }) => {
-      const check = await gate(request, 'admin')
-      if ('fail' in check) return check.fail
+        const user = toUserInfo(row)
+        const canSeeEmail = check.user.role === 'admin' || check.user.id === user.id
+        const { id, name, role, active } = user
+        return json(200, { user: canSeeEmail ? user : { id, name, role, active } })
+      })
 
-      const { internalAdapter } = await getAuth().$context
-      const rows = await internalAdapter.listUsers()
-      return json(200, { users: rows.map((row) => toUserInfo(row)) })
-    })
+      .put(
+        '/api/users/:id/role',
+        async ({ request, params }) => {
+          const check = await gate(request, 'admin')
+          if ('fail' in check) return check.fail
+          if (params.id === check.user.id) {
+            return json(400, { error: 'You cannot change your own role.' })
+          }
 
-    .get('/api/users/:id', async ({ request, params }) => {
-      const check = await gate(request)
-      if ('fail' in check) return check.fail
+          const { role } = await readJson(request)
+          if (!isRole(role)) {
+            return json(400, { error: `"role" must be one of: ${ROLES.join(', ')}.` })
+          }
+          const user = await changeUser(params.id, { role })
+          return user ? json(200, { user }) : json(404, { error: 'No such user.' })
+        },
+        rawBody,
+      )
 
-      const row = await findUser(params.id)
-      if (!row) return json(404, { error: 'No such user.' })
+      .put(
+        '/api/users/:id/active',
+        async ({ request, params }) => {
+          const check = await gate(request, 'admin')
+          if ('fail' in check) return check.fail
+          if (params.id === check.user.id) {
+            return json(400, { error: 'You cannot deactivate your own account.' })
+          }
 
-      const user = toUserInfo(row)
-      const canSeeEmail = check.user.role === 'admin' || check.user.id === user.id
-      const { id, name, role, active } = user
-      return json(200, { user: canSeeEmail ? user : { id, name, role, active } })
-    })
-
-    .put(
-      '/api/users/:id/role',
-      async ({ request, params }) => {
-        const check = await gate(request, 'admin')
-        if ('fail' in check) return check.fail
-        if (params.id === check.user.id) {
-          return json(400, { error: 'You cannot change your own role.' })
-        }
-
-        const { role } = await readJson(request)
-        if (!isRole(role)) {
-          return json(400, { error: `"role" must be one of: ${ROLES.join(', ')}.` })
-        }
-        const user = await changeUser(params.id, { role })
-        return user ? json(200, { user }) : json(404, { error: 'No such user.' })
-      },
-      rawBody,
-    )
-
-    .put(
-      '/api/users/:id/active',
-      async ({ request, params }) => {
-        const check = await gate(request, 'admin')
-        if ('fail' in check) return check.fail
-        if (params.id === check.user.id) {
-          return json(400, { error: 'You cannot deactivate your own account.' })
-        }
-
-        const { active } = await readJson(request)
-        if (typeof active !== 'boolean') {
-          return json(400, { error: '"active" must be true or false.' })
-        }
-        const user = await changeUser(params.id, { active })
-        return user ? json(200, { user }) : json(404, { error: 'No such user.' })
-      },
-      rawBody,
-    )
+          const { active } = await readJson(request)
+          if (typeof active !== 'boolean') {
+            return json(400, { error: '"active" must be true or false.' })
+          }
+          const user = await changeUser(params.id, { active })
+          return user ? json(200, { user }) : json(404, { error: 'No such user.' })
+        },
+        rawBody,
+      )
+  )
 }
