@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "bun --watch src/index.ts",
-    "start": "bun src/index.ts",
+    "start": "docker compose up -d --remove-orphans && bun src/index.ts",
+    "stop": "docker compose down",
     "test": "bun test",
     "lint": "biome lint .",
     "fix": "biome check --write .",
