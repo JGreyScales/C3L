@@ -26,7 +26,9 @@ module only**. Four human **admins** review and approve every pull request into 
    files there freely.
 2. **Do not edit anything else** unless the human is clearly an admin and asks for it: `src/core/**`,
    `src/app.ts`, `src/index.ts`, `tests/app.test.ts`, `scripts/**`, `.github/**`, `biome.json`,
-   `tsconfig.json`, `package.json`, `bun.lock`, `README.md`, `AI_README.md`.
+   `tsconfig.json`, `package.json`, `bun.lock`, the root `docker-compose.yml`, `README.md`,
+   `AI_README.md`. (A `Dockerfile` and `docker-compose.yml` **inside the student's own module folder**
+   are fine: see the Docker recipe in section 6.)
 3. **Never touch another team's module folder**, even for an obvious bug. Tell the human what you
    found so they can tell that team.
 4. **Never rename or delete a module folder.** The folder name is the public URL and a test checks all
@@ -256,6 +258,33 @@ A full example is in `src/modules/_template/index.test.ts`. For tests that go th
 (integration), use `createApp()` from `src/app.ts` and `app.fetch(new Request(...))`; this exercises
 mounting and `finishResponse` too.
 
+### Docker services for a module (database, cache...)
+Only when the module really needs a service next to the website. Everything lives **in the module
+folder**: a `docker-compose.yml`, and a `Dockerfile` only if a ready-made `image:` is not enough.
+Never edit the root `docker-compose.yml`: an admin adds the module's file to it with one `include:`
+line (README sections 12 and 15.5). The Bun app itself does not run in Docker; it reaches the
+container on `localhost:<published port>`. Rules the file must follow, because every module's file is
+merged into one project named `c3l`:
+
+- **Prefix every service, volume and network with the module name** (`courses-db`, `courses-db-data`).
+  Compose does not warn when two files use the same service name: it silently merges them. Shared
+  volume names are silently shared too.
+- **No `container_name:`.** Two identical names make `docker compose` fail for everyone.
+- **Ports as `"127.0.0.1:<host>:<container>"`**, host port inside the module's range:
+  `30000 + N*100` to `+99` for module number N (module 2 gets 30200-30299). Clashes only show up at
+  `docker compose up`, never at `config`.
+- **Self-contained:** no `depends_on`, `links` or `networks` pointing at another module's service.
+  The file must be valid alone.
+- **No real secrets.** A throw-away `devpassword` for a local-only database is fine. Real values go
+  in `.env` (git-ignored). A committed example is named `env.example`, because `.gitignore` hides
+  `.env.*`.
+- Paths (`build: .`, `./data`) are relative to the module folder.
+
+Check with `docker compose -f src/modules/<folder>/docker-compose.yml config -q` (no output = valid;
+it does **not** check that the Dockerfile exists or builds), then `... up -d --build`, `... ps` and
+`... down`. Do not tell the human to edit the root compose file or `package.json`; say an admin does
+that after the pull request is merged.
+
 ### Extra module folder
 Copy `src/modules/_template`, rename the copy (valid folder name, see above), restart the dev server
 (new folders are discovered at startup).
@@ -267,8 +296,9 @@ Copy `src/modules/_template`, rename the copy (valid folder name, see above), re
 | Command                | What it does |
 |------------------------|--------------|
 | `bun install`          | Install dependencies (first time, and after `package.json` changes) |
-| `bun run dev`          | Start on `http://localhost:3000` (`PORT` env var changes it). Restarts on file changes; **new folders need a manual restart** |
-| `bun run start`        | Start without file watching |
+| `bun run dev`          | Start on `http://localhost:3000` (`PORT` env var changes it). Restarts on file changes; **new folders need a manual restart**. Does **not** start Docker |
+| `bun run start`        | Start Docker services from the root `docker-compose.yml` in the background (`docker compose up -d --remove-orphans`), then the site without file watching. Needs Docker running |
+| `bun run stop`         | Stop the Docker services (`docker compose down`) |
 | `bun run check`        | Lint + typecheck + tests + sanity. Run before every push |
 | `bun run lint`         | Biome lint (blocking in CI) |
 | `bun run fix`          | Biome: auto-fix lint problems and format |
@@ -305,6 +335,8 @@ src/core/finishResponse.ts    text -> HTML relabelling, friendly errors
 src/core/checkModules.ts      the sanity check used by the script and the tests
 src/modules/_template/        copy-me module (+ example test), hidden from the home page
 src/modules/NN-name/index.ts  the 12 modules
+src/modules/NN-name/Dockerfile, docker-compose.yml   optional, the module's own Docker services
+docker-compose.yml            main Docker file (admins only): `name: c3l` + `include:` of the modules' files
 tests/app.test.ts             tests for the machinery (writes temp modules into tests/.tmp-modules-*)
 scripts/check-modules.ts      `bun run sanity`
 .github/                      workflows/ci.yml, CODEOWNERS, pull_request_template.md
@@ -326,6 +358,12 @@ scripts/check-modules.ts      `bun run sanity`
 - Not syncing the fork before sending work upstream (the pull request then shows other teams' files).
 - "Fixing" a sync problem with `git rebase`, `git push --force`, `git reset --hard` or the
   **Discard commits** button. Use `git merge upstream/main` and ask an admin if it gets messy.
+- Docker: an unprefixed service or volume name (`db`, `data`), a `container_name`, a port outside the
+  module's range or not bound to `127.0.0.1`, a `depends_on` on another module's service, a real
+  secret in the file, `.env.example` (git-ignored; use `env.example`), or editing the root
+  `docker-compose.yml`.
+- Expecting `bun run dev` to start Docker (it does not), or `docker compose config` to prove the
+  Dockerfile builds (it does not).
 - Putting raw user input into HTML without `escapeHtml`.
 - Using Node-only assumptions or `npm`; this repo runs on Bun.
 - Adding a heavy framework or state-management layer to a beginner module. Keep it simple.

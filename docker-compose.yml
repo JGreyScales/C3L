@@ -1,0 +1,18 @@
+# The MAIN Docker Compose file. Only the admins edit this file.
+#
+# Modules that need their own Docker services (a database, a cache...) keep a small
+# `docker-compose.yml` (and a `Dockerfile` if needed) in their own folder. An admin reviews it and
+# adds ONE line for it under `include:` below. See README.md, section 12 and section 15.5.
+#
+# `bun run start` runs this file (in the background) before it starts the website.
+# `bun run dev` does NOT start Docker.
+name: c3l # fixed project name, so containers and volumes are not named after the folder
+
+# One line per module that has Docker files. Keep them in module order.
+# include:
+#   - src/modules/02-courses/docker-compose.yml
+
+services:
+  example:
+    image: ubuntu:24.04
+    container_name: dev-example

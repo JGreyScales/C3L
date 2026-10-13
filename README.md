@@ -56,10 +56,11 @@ own module** (section 8) and **how to keep your fork up to date** (section 5).
 9. [Other ways to return HTML](#9-other-ways-to-return-html)
 10. [Check your work before you push](#10-check-your-work-before-you-push)
 11. [Write a test](#11-write-a-test)
-12. [Something went wrong](#12-something-went-wrong)
-13. [How the project fits together](#13-how-the-project-fits-together)
-14. [For the 4 admins](#14-for-the-4-admins)
-15. [Glossary](#15-glossary)
+12. [Docker for your module (optional)](#12-docker-for-your-module-optional)
+13. [Something went wrong](#13-something-went-wrong)
+14. [How the project fits together](#14-how-the-project-fits-together)
+15. [For the 4 admins](#15-for-the-4-admins)
+16. [Glossary](#16-glossary)
 
 ---
 
@@ -144,7 +145,7 @@ bun --version
 ```
 
 Both should print a version number. If one says "command not found" or "not recognized", go to
-[Something went wrong](#12-something-went-wrong).
+[Something went wrong](#13-something-went-wrong).
 
 > **Tip: what is a terminal?** It is the window where you type commands. In VS Code, press
 > **Ctrl + `** (the key above Tab) to open one at the bottom. It starts inside your project folder,
@@ -479,7 +480,7 @@ Fix anything it reports first (through a normal feature branch).
    Class repository on the left, your fork on the right, `main` on both sides.
 4. Look at **Files changed**. It should only show files in **your module folder**. If you see other
    teams' files or `src/core`, your fork is out of sync or you changed something you should not
-   have. Stop and see [section 12](#12-something-went-wrong).
+   have. Stop and see [section 13](#13-something-went-wrong).
 5. Fill in the form, keep **Allow edits by maintainers** ticked, and click **Create pull request**.
 
 ### Step 4. Wait for the checks and the review
@@ -523,6 +524,9 @@ comes back down to you, together with everybody else's, and you carry on.
 - Run `bun run check` before you push.
 - Write commit messages that say what you changed.
 - Ask an admin before you add a new library (`bun add ...`).
+- Need a database or another service? Put a `Dockerfile` and a `docker-compose.yml` **in your module
+  folder** and follow [section 12](#12-docker-for-your-module-optional). An admin adds it to the
+  main Docker setup.
 
 **Do not**
 
@@ -530,11 +534,12 @@ comes back down to you, together with everybody else's, and you carry on.
 - Do not use `git push --force`, `git reset --hard` or `git rebase` unless an admin says so.
 - Do not click **Discard commits** in the GitHub sync box.
 - Do not edit other teams' folders, even to "just fix a typo". Tell them instead.
-- Do not edit `src/core`, `tests/app.test.ts`, `.github`, `package.json` or other files in the
-  project's root. They hold the whole thing together. If you think something needs to change there,
+- Do not edit `src/core`, `tests/app.test.ts`, `.github`, `package.json`, the root
+  `docker-compose.yml` or other files in the project's root. They hold the whole thing together. If you think something needs to change there,
   ask an admin.
 - Do not rename your folder.
-- Do not put passwords or secret keys in your code.
+- Do not put passwords or secret keys in your code. (The one exception: a throw-away password for a
+  test database that only your own computer can reach, like `devpassword` in section 12.)
 
 ---
 
@@ -706,7 +711,128 @@ your catalog page.
 
 ---
 
-## 12. Something went wrong
+## 12. Docker for your module (optional)
+
+**Most modules do not need this.** Skip this section unless your module needs a service that runs
+next to the website, like a database or a cache.
+
+[Docker](https://www.docker.com/) runs such services in small isolated boxes called *containers*.
+You describe them in two files that live **in your module folder**:
+
+| File | What it is | Needed? |
+|------|------------|---------|
+| `Dockerfile` | The recipe for building your own image | Only if you cannot use a ready-made image |
+| `docker-compose.yml` | The list of containers (services) your module wants | Yes |
+
+You never touch the main `docker-compose.yml` in the project's root. After your pull request is
+merged, **an admin adds your file to the main one** (section 15.5). Your website code still runs with
+Bun, not inside Docker. It talks to your containers through `localhost` and a port (see 12.2).
+
+### 12.1 Install Docker (once, only if you use this)
+
+Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) and start it. Then check:
+
+```
+docker --version
+docker compose version
+```
+
+Both should print a version. `bun run dev` never needs Docker.
+
+### 12.2 The rules
+
+Everybody's file is merged into one, so a shared name causes trouble for **other teams**. Follow
+these exactly. The admins check every one of them.
+
+1. **Start every name with your module's name.** Services, volumes and networks:
+   `courses-db`, `courses-cache`, `courses-db-data`. Not `db` and not `data`. Docker silently
+   merges two services with the same name, and two modules would end up sharing a volume.
+2. **No `container_name:`.** Docker names containers for you. Two of the same name break everything.
+3. **Publish ports on `127.0.0.1` only, inside your range.** Write ports as
+   `"127.0.0.1:<host port>:<container port>"`. Module number *N* may use host ports
+   `30000 + N * 100` to `30000 + N * 100 + 99`:
+
+   | Module | Host ports | | Module | Host ports |
+   |--------|------------|-|--------|------------|
+   | 1      | 30100-30199 | | 7  | 30700-30799 |
+   | 2      | 30200-30299 | | 8  | 30800-30899 |
+   | 3      | 30300-30399 | | 9  | 30900-30999 |
+   | 4      | 30400-30499 | | 10 | 31000-31099 |
+   | 5      | 30500-30599 | | 11 | 31100-31199 |
+   | 6      | 30600-30699 | | 12 | 31200-31299 |
+
+   `127.0.0.1` means only your own computer can reach it. The website itself uses port 3000.
+4. **Keep the file self-contained.** It may only mention its own services. No `depends_on`,
+   `links` or `networks` that point to another module's service. The file must also work alone.
+5. **No real secrets.** A throw-away value like `devpassword` for a database that only your computer
+   can reach is fine. Anything real goes in a `.env` file, which Git ignores. If you want to show
+   others what the file needs, commit it as `env.example` (not `.env.example`, Git ignores that).
+6. **`build: .` means "use the Dockerfile in my folder".** Docker reads *everything* in your folder
+   as input, so keep big files out of it (or list them in a `.dockerignore` file).
+7. **Paths are relative to your folder.** `./data` means `src/modules/<your-folder>/data`.
+
+### 12.3 An example
+
+`src/modules/02-courses/docker-compose.yml`:
+
+```yaml
+services:
+  courses-db:
+    build: .
+    ports:
+      - "127.0.0.1:30200:5432"
+    environment:
+      POSTGRES_PASSWORD: devpassword
+    volumes:
+      - courses-db-data:/var/lib/postgresql/data
+
+volumes:
+  courses-db-data:
+```
+
+`src/modules/02-courses/Dockerfile`:
+
+```
+FROM postgres:16
+COPY init.sql /docker-entrypoint-initdb.d/
+```
+
+(If you do not need your own image, drop `build: .` and the Dockerfile, and write
+`image: postgres:16` instead.) Your website code then connects to `localhost:30200`.
+
+### 12.4 Try it on its own
+
+Run these from the project's root folder, with your own folder name:
+
+```
+docker compose -f src/modules/02-courses/docker-compose.yml config -q
+docker compose -f src/modules/02-courses/docker-compose.yml up -d --build
+docker compose -f src/modules/02-courses/docker-compose.yml ps
+docker compose -f src/modules/02-courses/docker-compose.yml down
+```
+
+| Command | What it does |
+|---------|--------------|
+| `config -q` | Checks the file. **No output means it is valid.** It does *not* check that your Dockerfile exists or builds. |
+| `up -d --build` | Builds and starts your containers in the background. This is the real test. |
+| `ps` | Lists what is running |
+| `down` | Stops and removes the containers. Your data stays. Add `-v` to delete the data too. |
+
+### 12.5 What happens after that
+
+1. You send your work to the class repository like always (section 6). The Docker files are part of
+   your module folder, so they travel with your pull request.
+2. An admin reviews them and adds **one line** to the main `docker-compose.yml`.
+3. From then on `bun run start` starts every module's containers (in the background) and then the
+   website. `bun run stop` stops the containers.
+4. `bun run dev` does **not** start Docker. While you work, start your own containers with the
+   command in 12.4.
+
+If the admins find a problem, they will send it back to you, like any other review.
+
+---
+
+## 13. Something went wrong
 
 ### Setting up and running
 
@@ -720,6 +846,10 @@ your catalog page.
 | **Red squiggly lines** in VS Code | Usually a missing comma, a missing backtick or a missing `)`. Remember: only the last route line ends with a comma. |
 | `bun run check` fails on **Lint** or **Type check** | Read the file name and line number in the message. Try `bun run fix` first, then run `bun run check` again. |
 | `bun run check` fails on **Module sanity** | Your `/` route must exist and return HTML. The message says which. |
+| `docker: command not found` or "Cannot connect to the Docker daemon" | Docker is not installed or not running. Install and start Docker Desktop (section 12.1). Only needed if your module has Docker files, or for `bun run start`. `bun run dev` never needs Docker. |
+| `docker compose config` says **service ... is invalid / undefined service** | Your `docker-compose.yml` is not self-contained. It may only talk about its own services. Read the message; it names the line. |
+| `Bind for 127.0.0.1:... failed: port is already allocated` | Another container or program uses that host port. Check you use a port from **your** range (section 12.2) and that no old copy is still running (`docker ps`). |
+| My container works alone but the admins' `docker compose up` fails | Two files probably use the same name (service, volume or port). Prefix every name with your module name (section 12.2). |
 
 ### Forks, syncing and pull requests
 
@@ -741,7 +871,7 @@ your catalog page.
 
 ---
 
-## 13. How the project fits together
+## 14. How the project fits together
 
 You do not need this to do your work, but it is good to know.
 
@@ -759,12 +889,13 @@ C3L/
 │   └── modules/              <-- YOUR WORK LIVES HERE
 │       ├── _template/          copy-me folder (hidden from the home page)
 │       ├── 01-identity-users/  Module 1
-│       ├── 02-courses/         Module 2
+│       ├── 02-courses/         Module 2   (may hold a Dockerfile + docker-compose.yml)
 │       ├── ...                 ...
 │       └── 12-dashboard/       Module 12
 ├── tests/                    tests for the machinery
 ├── scripts/                  the sanity check
 ├── .github/                  automatic checks, pull request form, admin list
+├── docker-compose.yml        the MAIN Docker file. Admins only. Includes the modules' files.
 ├── README.md                 this file
 └── AI_README.md              the same story, for AI assistants
 ```
@@ -784,9 +915,9 @@ merge conflicts, even though 12 forks feed into one repository.
 
 ---
 
-## 14. For the 4 admins
+## 15. For the 4 admins
 
-### 14.1 One-time setup
+### 15.1 One-time setup
 
 1. **Install and commit the lock file.** Run `bun install` once on your computer. It creates
    `bun.lock`. Commit it (through a pull request) so every team installs identical versions.
@@ -841,25 +972,26 @@ merge conflicts, even though 12 forks feed into one repository.
 Students cannot push to `main` (they only have read access to this repository), and `main` only
 moves when one of the admins approves a pull request whose checks are green.
 
-### 14.2 Reviewing a pull request from a team's fork
+### 15.2 Reviewing a pull request from a team's fork
 
 1. Open the pull request. The header says where it comes from, like
    `team-fork-owner wants to merge N commits into JGreyScales:main from team-fork-owner:main`.
-2. If the checks say **awaiting approval**, click **Approve and run workflows** (see 14.1 step 4).
+2. If the checks say **awaiting approval**, click **Approve and run workflows** (see 15.1 step 4).
    Green means the code loads, the module's front page answers with HTML, and the tests pass. Red
    means send it back.
 3. Open the **Files changed** tab. A normal pull request only touches **one folder** in
    `src/modules`. If it touches `src/core`, `.github`, `package.json` or another team's folder, ask
-   why before approving. Lots of unrelated files usually means the team did not sync first: ask them
+   why before approving. A `Dockerfile` or `docker-compose.yml` **inside the team's own module
+   folder** is allowed: run the checklist in 15.5 before approving. Lots of unrelated files usually means the team did not sync first: ask them
    to sync (README section 5) and look again.
 4. Click **Review changes**, then **Approve** or **Request changes** (and say what to fix). Teams fix
    things in their fork and the pull request updates itself.
 5. When it is approved and green, merge with **Create a merge commit** (the only option, if you
-   followed 14.1 step 5).
+   followed 15.1 step 5).
 
 You cannot approve a pull request you opened yourself. Another admin has to.
 
-### 14.3 What the automatic checks do
+### 15.3 What the automatic checks do
 
 Defined in `.github/workflows/ci.yml`. They run on every pull request (including the ones from forks
 and the ones teams make inside their own fork, once the fork owner enabled Actions) and on every push
@@ -877,17 +1009,58 @@ The **module sanity check** is the one that protects the shared site: it loads e
 its front page, and it writes any problem as a red message on the pull request. A test also fails if
 one of the 12 module folders is renamed or deleted.
 
-### 14.4 Changing the project
+### 15.4 Changing the project
 
 - **Add a 13th module:** copy `src/modules/_template`, rename the copy, and send it through a pull
   request like any other change. Teams get it the next time they sync.
 - **Fix something in `src/core` or the CI:** same, through a pull request. Tell the teams to sync.
 - **Add a library:** `bun add <name>`, commit `package.json` and `bun.lock` through a pull request.
 - **Change the port:** set `PORT` before `bun run dev` (see the troubleshooting table).
+- **Add a module's Docker services to the main Docker file:** see 15.5.
+
+### 15.5 Adding a module's Docker services to the main Docker file
+
+Teams never touch the root `docker-compose.yml`. They only add files inside their own module folder
+(section 12). An admin decides whether those files join the main setup, **after the pull request is
+merged into `main`** (or in a small admin pull request that only changes the root
+`docker-compose.yml`).
+
+**Review checklist** for the module's `docker-compose.yml` and `Dockerfile`:
+
+| Check | Why |
+|-------|-----|
+| Every service, volume and network name starts with the module name (`courses-db`, `courses-db-data`) | Compose silently **merges** two services with the same name, and two modules would share a volume. Nothing warns you. |
+| No `container_name:` | Two of them with the same name make `docker compose` fail for everybody. |
+| Every published port is `"127.0.0.1:<host>:<container>"` and the host port is inside the module's range (section 12.2) | Two modules on the same host port only fail at `docker compose up`, not at `config`. |
+| No `depends_on`, `links` or `networks` that point at another module's service | The file must also work alone. Cross-module wiring is decided by the admins. |
+| No real secrets, no `.env` file committed. An example file is called `env.example` (not `.env.example`, which `.gitignore` hides) | Same rule as for code. |
+| `build:` points at a `Dockerfile` that exists in the same folder | `docker compose config` does not notice a missing Dockerfile. Only the build fails. |
+
+**Add it:**
+
+1. Get the newest `main`: `git checkout main`, `git pull`.
+2. Check the fragment alone: `docker compose -f src/modules/<folder>/docker-compose.yml config -q`.
+   No output means it is valid.
+3. Add **one line** to `include:` in the root `docker-compose.yml` (keep module order):
+   ```yaml
+   include:
+     - src/modules/02-courses/docker-compose.yml
+   ```
+4. Check the whole thing: `docker compose config -q`, then `docker compose config --services` to see
+   every service. Look for a service you did not expect, or one missing.
+5. Try it: `bun run start`, then `docker compose ps`. Stop it with `bun run stop`.
+6. Send the change as a pull request (one file: the root `docker-compose.yml`) and merge it like any
+   other change.
+
+One wrong path in `include:` makes `docker compose` fail for **everyone**, so always do step 4
+before you merge. To remove a module's Docker setup, delete its line.
+
+> `include:` needs Docker Compose 2.20 or newer (`docker compose version`). Any current Docker
+> Desktop is fine.
 
 ---
 
-## 15. Glossary
+## 16. Glossary
 
 | Word              | Meaning                                                                          |
 |-------------------|----------------------------------------------------------------------------------|
@@ -909,3 +1082,7 @@ one of the 12 module folders is renamed or deleted.
 | CI / checks       | Robots on GitHub that test your code on every pull request                       |
 | Lint              | A tool that points out likely mistakes in code                                   |
 | Merge conflict    | Two people changed the same lines and Git needs a human to choose                |
+| Docker            | A program that runs services (a database...) in small isolated boxes called containers |
+| Dockerfile        | A recipe that says how to build one container                                    |
+| Compose file      | `docker-compose.yml`: lists the containers to start together                     |
+| Service           | One container in a compose file, like `courses-db`                               |
