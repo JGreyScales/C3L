@@ -4,7 +4,6 @@ name: CI
 # Each check shows up as its own line on the pull request, so you can see which one failed.
 on:
   push:
-    branches: [main]
   pull_request:
 
 permissions:

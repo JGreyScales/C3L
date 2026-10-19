@@ -57,10 +57,11 @@ own module** (section 8) and **how to keep your fork up to date** (section 5).
 10. [Check your work before you push](#10-check-your-work-before-you-push)
 11. [Write a test](#11-write-a-test)
 12. [Docker for your module (optional)](#12-docker-for-your-module-optional)
-13. [Something went wrong](#13-something-went-wrong)
-14. [How the project fits together](#14-how-the-project-fits-together)
-15. [For the 4 admins](#15-for-the-4-admins)
-16. [Glossary](#16-glossary)
+13. [Calling another server: the proxy (optional)](#13-calling-another-server-the-middle-man-proxy-optional)
+14. [Something went wrong](#14-something-went-wrong)
+15. [How the project fits together](#15-how-the-project-fits-together)
+16. [For the 4 admins](#16-for-the-4-admins)
+17. [Glossary](#17-glossary)
 
 ---
 
@@ -145,7 +146,7 @@ bun --version
 ```
 
 Both should print a version number. If one says "command not found" or "not recognized", go to
-[Something went wrong](#13-something-went-wrong).
+[Something went wrong](#14-something-went-wrong).
 
 > **Tip: what is a terminal?** It is the window where you type commands. In VS Code, press
 > **Ctrl + `** (the key above Tab) to open one at the bottom. It starts inside your project folder,
@@ -480,7 +481,7 @@ Fix anything it reports first (through a normal feature branch).
    Class repository on the left, your fork on the right, `main` on both sides.
 4. Look at **Files changed**. It should only show files in **your module folder**. If you see other
    teams' files or `src/core`, your fork is out of sync or you changed something you should not
-   have. Stop and see [section 13](#13-something-went-wrong).
+   have. Stop and see [section 14](#14-something-went-wrong).
 5. Fill in the form, keep **Allow edits by maintainers** ticked, and click **Create pull request**.
 
 ### Step 4. Wait for the checks and the review
@@ -524,6 +525,8 @@ comes back down to you, together with everybody else's, and you carry on.
 - Run `bun run check` before you push.
 - Write commit messages that say what you changed.
 - Ask an admin before you add a new library (`bun add ...`).
+- Want to copy something from `src/examples` (like the proxy in [section 13](#13-calling-another-server-the-middle-man-proxy-optional))?
+  Copy the file into **your** module folder. Do not change the original.
 - Need a database or another service? Put a `Dockerfile` and a `docker-compose.yml` **in your module
   folder** and follow [section 12](#12-docker-for-your-module-optional). An admin adds it to the
   main Docker setup.
@@ -535,7 +538,7 @@ comes back down to you, together with everybody else's, and you carry on.
 - Do not click **Discard commits** in the GitHub sync box.
 - Do not edit other teams' folders, even to "just fix a typo". Tell them instead.
 - Do not edit `src/core`, `tests/app.test.ts`, `.github`, `package.json`, the root
-  `docker-compose.yml` or other files in the project's root. They hold the whole thing together. If you think something needs to change there,
+  `docker-compose.yml`, `src/examples` or other files in the project's root. They hold the whole thing together. If you think something needs to change there,
   ask an admin.
 - Do not rename your folder.
 - Do not put passwords or secret keys in your code. (The one exception: a throw-away password for a
@@ -725,7 +728,7 @@ You describe them in two files that live **in your module folder**:
 | `docker-compose.yml` | The list of containers (services) your module wants | Yes |
 
 You never touch the main `docker-compose.yml` in the project's root. After your pull request is
-merged, **an admin adds your file to the main one** (section 15.5). Your website code still runs with
+merged, **an admin adds your file to the main one** (section 16.5). Your website code still runs with
 Bun, not inside Docker. It talks to your containers through `localhost` and a port (see 12.2).
 
 ### 12.1 Install Docker (once, only if you use this)
@@ -830,9 +833,122 @@ docker compose -f src/modules/02-courses/docker-compose.yml down
 
 If the admins find a problem, they will send it back to you, like any other review.
 
+Need your module's pages to talk to a container's HTTP API? See [section 13](#13-calling-another-server-the-middle-man-proxy-optional).
+
 ---
 
-## 13. Something went wrong
+## 13. Calling another server: the middle-man proxy (optional)
+
+Most modules never need this. It is for the day your module has to talk to **a separate server**:
+for example a Docker service that has an HTTP API (section 12), or an app someone runs on another
+port. Your module's Elysia router becomes a **middle man**: callers talk to your module, your module
+passes the request on, and the answer comes back the same way.
+
+```
+ browser or another module                your module (on the C3L site)              the other server
+ ─────────────────────────   GET /02-courses/api/users?id=1   ──────────────►   GET /users?id=1
+                                  (the "/02-courses/api" part is removed)             on port 7000
+ ◄─────────────────────────────────────  the same answer, passed back  ◄────────────────────────
+```
+
+### 13.1 Do I need it?
+
+| Situation | What to use |
+|-----------|-------------|
+| Another **module** on the C3L site | No proxy. All modules run in the same site. Ask an admin how modules should call each other (the suggestion is routes under `/api/...` in each module). |
+| A **separate server** (a Docker service, an app on another port) that your **browser pages** need to reach | The proxy. The browser only ever talks to the C3L site, so there is no extra address to open up or to get wrong. |
+| A separate server that only your module's **own code** uses | Plain `fetch('http://localhost:<port>/...')` is enough. |
+| You want to **check something first** (is the user signed in?) before passing a request on | The proxy: do the check, then call `forwardRequest`. |
+
+### 13.2 Try the demo
+
+The demo lives in `src/examples/proxy-demo/` and has four small files:
+
+| File | What it is |
+|------|------------|
+| `upstream.ts` | A tiny Elysia app on port 7000. It plays "the other server". |
+| `proxy.ts` | The middle man, on port 3001. Everything under `/api/` is passed on to port 7000. |
+| `forward.ts` | The code that does the passing on. **This is the file you copy.** It needs no libraries. |
+| `forward.test.ts` | Tests for `forward.ts` (they run with `bun run test`). |
+
+Open **two terminals** in the project folder.
+
+Terminal 1, the other server:
+
+```
+bun src/examples/proxy-demo/upstream.ts
+```
+
+Terminal 2, the middle man:
+
+```
+bun src/examples/proxy-demo/proxy.ts
+```
+
+Then, in a third terminal (or the browser address bar for the first one):
+
+```
+curl http://localhost:7000/hello
+curl "http://localhost:3001/api/hello"
+curl "http://localhost:3001/api/users?id=1"
+curl -X POST http://localhost:3001/api/echo -H "content-type: application/json" -d '{"hi":1}'
+```
+
+The first call goes straight to the other server. The next ones go through the middle man and give
+the same kind of answer. Stop the other server (Ctrl + C in terminal 1) and call
+`/api/hello` again: the middle man answers **502** with `{"error":"Target unreachable", ...}`.
+
+Different ports: `UPSTREAM_PORT=7100 bun ...upstream.ts`, `PROXY_PORT=3002 bun ...proxy.ts` and
+`UPSTREAM_URL=http://localhost:7100 bun ...proxy.ts`.
+
+### 13.3 Use it in your module
+
+1. **Copy `forward.ts`** into your module folder (you may only change your own folder). Ask an admin
+   if you would rather have a shared copy.
+2. Add one route to your router. A module is mounted under its folder name, so the part to remove
+   is `${base}/api`, not just `/api`:
+
+```ts
+import { Elysia } from 'elysia'
+import { defineModule, moduleBase } from '../../core/defineModule'
+import { forwardRequest } from './forward'
+
+const base = moduleBase(import.meta.dir) // "/02-courses"
+
+// Elysia must not read the request body first, or there is nothing left to pass on.
+const rawBody = { parse: 'none' } as const
+
+export default defineModule({
+  name: 'Module 2: Course Management',
+  router: new Elysia()
+    .get('/', () => `<h1>Courses</h1>`)
+    // /02-courses/api/users?id=1  becomes  http://localhost:7000/users?id=1
+    .all(
+      '/api/*',
+      ({ request }) =>
+        forwardRequest(request, { target: 'http://localhost:7000', stripPrefix: `${base}/api` }),
+      rawBody,
+    ),
+})
+```
+
+If the other server runs in Docker, `target` is `http://localhost:<the host port from your range>`
+(section 12.2).
+
+### 13.4 Good to know
+
+- **Fix the target in your code.** Never build it from something the caller sent (a header, a query
+  value). Otherwise anyone could make the site call any address they like.
+- **Everything is passed on**, cookies and `Authorization` headers included. Only point it at
+  servers you trust.
+- **Plain text is shown as HTML.** The site labels every `text/plain` answer as a web page
+  (section 15). JSON, files and HTML are not affected.
+- `forward.ts` does not follow redirects; it hands them to the caller. It does not do WebSockets.
+- It adds an `x-forwarded-host` header, so the other server can see which address the caller used.
+
+---
+
+## 14. Something went wrong
 
 ### Setting up and running
 
@@ -846,6 +962,9 @@ If the admins find a problem, they will send it back to you, like any other revi
 | **Red squiggly lines** in VS Code | Usually a missing comma, a missing backtick or a missing `)`. Remember: only the last route line ends with a comma. |
 | `bun run check` fails on **Lint** or **Type check** | Read the file name and line number in the message. Try `bun run fix` first, then run `bun run check` again. |
 | `bun run check` fails on **Module sanity** | Your `/` route must exist and return HTML. The message says which. |
+| The proxy answers **502** `Target unreachable` | The other server is not running, or the port in `target` is wrong. Start it and try the address directly (`curl http://localhost:7000/hello`). Section 13. |
+| The proxy gives **404** but the other server works | The part of the address that is removed is wrong. In a module it must be `${base}/api` (section 13.3). |
+| A `POST` reaches the other server **without its body** | The route is missing `{ parse: 'none' }` (section 13.3). |
 | `docker: command not found` or "Cannot connect to the Docker daemon" | Docker is not installed or not running. Install and start Docker Desktop (section 12.1). Only needed if your module has Docker files, or for `bun run start`. `bun run dev` never needs Docker. |
 | `docker compose config` says **service ... is invalid / undefined service** | Your `docker-compose.yml` is not self-contained. It may only talk about its own services. Read the message; it names the line. |
 | `Bind for 127.0.0.1:... failed: port is already allocated` | Another container or program uses that host port. Check you use a port from **your** range (section 12.2) and that no old copy is still running (`docker ps`). |
@@ -871,7 +990,7 @@ If the admins find a problem, they will send it back to you, like any other revi
 
 ---
 
-## 14. How the project fits together
+## 15. How the project fits together
 
 You do not need this to do your work, but it is good to know.
 
@@ -880,6 +999,7 @@ C3L/
 ├── src/
 │   ├── index.ts              starts the web server
 │   ├── app.ts                builds the whole site
+│   ├── examples/             small demos for everybody (the proxy demo). Admins only.
 │   ├── core/                 the machinery. Admins only. Do not edit.
 │   │   ├── defineModule.ts     what every module calls: defineModule({...})
 │   │   ├── registry.ts         the helper that adds a module to the main router
@@ -915,9 +1035,9 @@ merge conflicts, even though 12 forks feed into one repository.
 
 ---
 
-## 15. For the 4 admins
+## 16. For the 4 admins
 
-### 15.1 One-time setup
+### 16.1 One-time setup
 
 1. **Install and commit the lock file.** Run `bun install` once on your computer. It creates
    `bun.lock`. Commit it (through a pull request) so every team installs identical versions.
@@ -972,26 +1092,26 @@ merge conflicts, even though 12 forks feed into one repository.
 Students cannot push to `main` (they only have read access to this repository), and `main` only
 moves when one of the admins approves a pull request whose checks are green.
 
-### 15.2 Reviewing a pull request from a team's fork
+### 16.2 Reviewing a pull request from a team's fork
 
 1. Open the pull request. The header says where it comes from, like
    `team-fork-owner wants to merge N commits into JGreyScales:main from team-fork-owner:main`.
-2. If the checks say **awaiting approval**, click **Approve and run workflows** (see 15.1 step 4).
+2. If the checks say **awaiting approval**, click **Approve and run workflows** (see 16.1 step 4).
    Green means the code loads, the module's front page answers with HTML, and the tests pass. Red
    means send it back.
 3. Open the **Files changed** tab. A normal pull request only touches **one folder** in
    `src/modules`. If it touches `src/core`, `.github`, `package.json` or another team's folder, ask
    why before approving. A `Dockerfile` or `docker-compose.yml` **inside the team's own module
-   folder** is allowed: run the checklist in 15.5 before approving. Lots of unrelated files usually means the team did not sync first: ask them
+   folder** is allowed: run the checklist in 16.5 before approving. Lots of unrelated files usually means the team did not sync first: ask them
    to sync (README section 5) and look again.
 4. Click **Review changes**, then **Approve** or **Request changes** (and say what to fix). Teams fix
    things in their fork and the pull request updates itself.
 5. When it is approved and green, merge with **Create a merge commit** (the only option, if you
-   followed 15.1 step 5).
+   followed 16.1 step 5).
 
 You cannot approve a pull request you opened yourself. Another admin has to.
 
-### 15.3 What the automatic checks do
+### 16.3 What the automatic checks do
 
 Defined in `.github/workflows/ci.yml`. They run on every pull request (including the ones from forks
 and the ones teams make inside their own fork, once the fork owner enabled Actions) and on every push
@@ -1009,16 +1129,16 @@ The **module sanity check** is the one that protects the shared site: it loads e
 its front page, and it writes any problem as a red message on the pull request. A test also fails if
 one of the 12 module folders is renamed or deleted.
 
-### 15.4 Changing the project
+### 16.4 Changing the project
 
 - **Add a 13th module:** copy `src/modules/_template`, rename the copy, and send it through a pull
   request like any other change. Teams get it the next time they sync.
 - **Fix something in `src/core` or the CI:** same, through a pull request. Tell the teams to sync.
 - **Add a library:** `bun add <name>`, commit `package.json` and `bun.lock` through a pull request.
 - **Change the port:** set `PORT` before `bun run dev` (see the troubleshooting table).
-- **Add a module's Docker services to the main Docker file:** see 15.5.
+- **Add a module's Docker services to the main Docker file:** see 16.5.
 
-### 15.5 Adding a module's Docker services to the main Docker file
+### 16.5 Adding a module's Docker services to the main Docker file
 
 Teams never touch the root `docker-compose.yml`. They only add files inside their own module folder
 (section 12). An admin decides whether those files join the main setup, **after the pull request is
@@ -1060,7 +1180,7 @@ before you merge. To remove a module's Docker setup, delete its line.
 
 ---
 
-## 16. Glossary
+## 17. Glossary
 
 | Word              | Meaning                                                                          |
 |-------------------|----------------------------------------------------------------------------------|
@@ -1086,3 +1206,4 @@ before you merge. To remove a module's Docker setup, delete its line.
 | Dockerfile        | A recipe that says how to build one container                                    |
 | Compose file      | `docker-compose.yml`: lists the containers to start together                     |
 | Service           | One container in a compose file, like `courses-db`                               |
+| Proxy / middle man | A route that passes a request on to another server and returns its answer        |
