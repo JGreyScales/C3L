@@ -18,3 +18,15 @@ test('messages page loads', async () => {
   const res = await get('/messages')
   expect(res.status).toBe(200)
 })
+
+test('docs page loads', async () => {
+  const res = await mod.router.handle(new Request('http://localhost/docs'))
+  expect(res.status).toBe(200)
+})
+
+test('openapi.yaml is served as YAML', async () => {
+  const res = await mod.router.handle(new Request('http://localhost/openapi.yaml'))
+  expect(res.status).toBe(200)
+  expect(res.headers.get('Content-Type')).toBe('application/yaml')
+  expect(await res.text()).toContain('openapi: 3.0.3')
+})
