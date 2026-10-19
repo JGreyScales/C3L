@@ -21,6 +21,24 @@ export default defineModule({
         </ul>`,
       ),
     )
+    // The API spec file
+    .get(
+      '/openapi.yaml',
+      () =>
+        new Response(Bun.file(`${import.meta.dir}/openapi.yaml`), {
+          headers: { 'Content-Type': 'application/yaml' },
+        }),
+    )
+    // Interactive API docs
+    .get(
+      '/docs',
+      () => `
+        <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+        <div id="swagger"></div>
+        <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+        <script>SwaggerUIBundle({ url: '${base}/openapi.yaml', dom_id: '#swagger' })</script>
+      `,
+    )
     .use(notificationRoutes)
     .use(messageRoutes),
 })
