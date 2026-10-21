@@ -14,6 +14,7 @@
 //   4. Save. Your new page is at  http://localhost:3000/03-content/<your-address>
 import { Elysia } from 'elysia'
 import { defineModule, moduleBase } from '../../core/defineModule'
+import { moduleCreateRoutes } from './module.create.routes'
 import { moduleListRoutes } from './module.list.routes'
 
 const base = moduleBase(import.meta.dir)
@@ -23,6 +24,7 @@ export default defineModule({
   description: 'Units, learning materials, publishing',
 
   router: new Elysia()
+    .use(moduleCreateRoutes)
     .use(moduleListRoutes)
     // Front page of this module. The button on the home page opens it.
     .get(
