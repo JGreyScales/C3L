@@ -1,27 +1,39 @@
-// MODULE 2: Course Management
+// index.ts
+// The "brain" of module 2. It holds the course data and defines every route.
+// All the HTML is in views.ts, all the CSS is in styles.ts - this file just
+// wires them together with the data.
 //
 // Scope from the project brief:
-//   - Create courses
-//   - Edit course information
-//   - Course settings
-//   - Course catalog
-//   - Student enrollment
-//   - Instructor assignment to courses
-//   - Archive active/inactive courses
-//
-// HOW TO ADD A PAGE TO THE ROUTER (basic demo):
-//   1. Find the router at the bottom of this file.
-//   2. Copy the  .get('/hello', ...)  line.
-//   3. Change the address ('/hello') and the HTML it returns.
-//   4. Save. Your new page is at  http://localhost:3000/02-courses/<your-address>
+//   - Create courses                  (done)
+//   - Edit course information          (done)
+//   - Course settings                  (only capacity so far, will extend later)
+//   - Course catalog                   (done)
+//   - Student enrollment               (not done yet)
+//   - Instructor assignment to courses (not done yet)
+//   - Archive active/inactive courses  (not done yet)
 
 import { Elysia } from 'elysia'
 import { defineModule, moduleBase } from '../../core/defineModule'
+import {
+  catalogPage,
+  createPage,
+  dashboardPage,
+  editPage,
+  notFoundPage,
+  successPage,
+  type Course,
+} from './views'
 
+// Where module 2 is mounted, e.g. "/02-courses".
+// I use this everywhere I need to build a link so nothing is hardcoded.
 const base = moduleBase(import.meta.dir)
 
-// Simple list of courses (stored in memory)
-const courses = [
+// ---- Data ----
+// The course list is just an array in memory. It survives across requests
+// while the server is running, but resets every time I restart `bun run dev`.
+// That's fine for learning, obviously a real app would use a database.
+
+const courses: Course[] = [
   {
     id: '1',
     code: 'PROG2020',
@@ -38,156 +50,81 @@ const courses = [
   },
 ]
 
+// Small helpers so I don't write the same find/loop everywhere.
+
+const findCourse = (id: string): Course | undefined =>
+  courses.find((c) => c.id === id)
+
+// The new id is just courses.length + 1. Ugly but works for a demo. If we ever
+// delete a course we'll get duplicate ids - I'll fix that when we add archive.
+
+function createCourse(input: Omit<Course, 'id'>): Course {
+  const course: Course = { id: String(courses.length + 1), ...input }
+  courses.push(course)
+  return course
+}
+
+function updateCourse(id: string, input: Omit<Course, 'id'>): Course | undefined {
+  const course = findCourse(id)
+  if (!course) return undefined
+  // Object.assign copies each field from `input` onto `course`, so we don't
+  // have to write five lines like course.code = input.code, etc.
+  Object.assign(course, input)
+  return course
+}
+
+// Grabs the fields out of the submitted <form> in one place, so POST /create
+// and POST /:id/edit share the exact same parsing. Also normalises the types:
+// form values are always strings, so capacity has to be converted to Number.
+async function readCourseForm(request: Request): Promise<Omit<Course, 'id'>> {
+  const form = await request.formData()
+  return {
+    code: String(form.get('code') ?? '').trim(),
+    title: String(form.get('title') ?? '').trim(),
+    description: String(form.get('description') ?? '').trim(),
+    capacity: Number(form.get('capacity') ?? 0),
+  }
+}
+
+// ---- Routes ----
+// Each route is just: call a view function with the data it needs.
+// The functions themselves are in views.ts.
+
 export default defineModule({
   name: 'Module 2: Course Management',
   description: 'Courses, catalog, enrollment',
 
   router: new Elysia()
-    // 1. Home page of Module 2
-    .get('/', () => {
-      let html = '<h1>Module 2: Course Management</h1>'
-      html +=
-        '<p><a href="' +
-        base +
-        '/create">Create New Course</a> | <a href="' +
-        base +
-        '/catalog">View Catalog</a></p>'
-      html += '<h2>All Courses</h2>'
+    // dashboard
+    .get('/', () => dashboardPage(base, courses))
 
-      for (let i = 0; i < courses.length; i++) {
-        const c = courses[i]
-        html += '<div style="border: 1px solid #ccc; padding: 10px; margin-bottom: 10px;">'
-        html += '<h3>' + c.code + ': ' + c.title + '</h3>'
-        html += '<p>' + c.description + '</p>'
-        html += '<p>Capacity: ' + c.capacity + '</p>'
-        html += '<a href="' + base + '/' + c.id + '/edit">Edit Course</a>'
-        html += '</div>'
-      }
+    // read-only catalog
+    .get('/catalog', () => catalogPage(base, courses))
 
-      return `<!doctype html><html><head><title>Course Management</title></head><body style="font-family: Arial; margin: 40px;">
-        <p><a href="/">Back to Home</a></p>
-        ${html}
-      </body></html>`
-    })
+    // show the "create a course" form
+    .get('/create', () => createPage(base))
 
-    // 2. Catalog Page
-    .get('/catalog', () => {
-      let html = '<h1>Course Catalog</h1>'
-
-      for (let i = 0; i < courses.length; i++) {
-        const c = courses[i]
-        html += '<ul><li><strong>' + c.code + '</strong> - ' + c.title + '</li></ul>'
-      }
-
-      html += '<p><a href="' + base + '">Back to Dashboard</a></p>'
-      return `<!doctype html><html><head><title>Catalog</title></head><body style="font-family: Arial; margin: 40px;">${html}</body></html>`
-    })
-
-    // 3. Create Course Form Page
-    .get('/create', () => {
-      return `<!doctype html><html><head><title>Create Course</title></head><body style="font-family: Arial; margin: 40px;">
-        <h1>Create a Course</h1>
-        <form method="POST" action="${base}/create">
-          <label>Course Code:</label><br>
-          <input type="text" name="code" required><br><br>
-          
-          <label>Course Title:</label><br>
-          <input type="text" name="title" required><br><br>
-          
-          <label>Description:</label><br>
-          <textarea name="description" required></textarea><br><br>
-          
-          <label>Capacity:</label><br>
-          <input type="number" name="capacity" value="30" required><br><br>
-          
-          <button type="submit">Save Course</button>
-        </form>
-        <p><a href="${base}">Back</a></p>
-      </body></html>`
-    })
-
-    // 4. Handle Create Form Submit
+    // handle the form submit. After saving we show a success page.
     .post('/create', async ({ request }) => {
-      const formData = await request.formData()
-      const newCode = formData.get('code')
-      const newTitle = formData.get('title')
-      const newDesc = formData.get('description')
-      const newCap = formData.get('capacity')
-
-      // Add to our array
-      const newCourse = {
-        id: String(courses.length + 1),
-        code: String(newCode),
-        title: String(newTitle),
-        description: String(newDesc),
-        capacity: Number(newCap),
-      }
-
-      courses.push(newCourse)
-
-      return `<!doctype html><html><head><title>Success</title></head><body style="font-family: Arial; margin: 40px;">
-        <h1>Course Created Successfully!</h1>
-        <p><a href="${base}">Back to Dashboard</a></p>
-      </body></html>`
+      createCourse(await readCourseForm(request))
+      return successPage(base, 'Course Created Successfully!')
     })
 
-    // 5. Edit Course Form Page
+    // show the edit form for one course
     .get('/:id/edit', ({ params }) => {
-      let foundCourse = null
-      for (let i = 0; i < courses.length; i++) {
-        if (courses[i].id === params.id) {
-          foundCourse = courses[i]
-          break
-        }
-      }
-
-      if (!foundCourse) {
-        return 'Course not found'
-      }
-
-      return `<!doctype html><html><head><title>Edit Course</title></head><body style="font-family: Arial; margin: 40px;">
-        <h1>Edit Course: ${foundCourse.code}</h1>
-        <form method="POST" action="${base}/${foundCourse.id}/edit">
-          <label>Course Code:</label><br>
-          <input type="text" name="code" value="${foundCourse.code}" required><br><br>
-          
-          <label>Course Title:</label><br>
-          <input type="text" name="title" value="${foundCourse.title}" required><br><br>
-          
-          <label>Description:</label><br>
-          <textarea name="description" required>${foundCourse.description}</textarea><br><br>
-          
-          <label>Capacity:</label><br>
-          <input type="number" name="capacity" value="${foundCourse.capacity}" required><br><br>
-          
-          <button type="submit">Update Course</button>
-        </form>
-        <p><a href="${base}">Cancel</a></p>
-      </body></html>`
+      const course = findCourse(params.id)
+      if (!course) return notFoundPage(base)
+      return editPage(base, course)
     })
 
-    // 6. Handle Edit Form Submit
+    // handle the edit form submit
     .post('/:id/edit', async ({ params, request }) => {
-      const formData = await request.formData()
-
-      for (let i = 0; i < courses.length; i++) {
-        if (courses[i].id === params.id) {
-          courses[i].code = String(formData.get('code'))
-          courses[i].title = String(formData.get('title'))
-          courses[i].description = String(formData.get('description'))
-          courses[i].capacity = Number(formData.get('capacity'))
-          break
-        }
-      }
-
-      return `<!doctype html><html><head><title>Updated</title></head><body style="font-family: Arial; margin: 40px;">
-        <h1>Course Updated Successfully!</h1>
-        <p><a href="${base}">Back to Dashboard</a></p>
-      </body></html>`
+      const updated = updateCourse(params.id, await readCourseForm(request))
+      if (!updated) return notFoundPage(base)
+      return successPage(base, 'Course Updated Successfully!')
     })
 
-    // 7. JSON API for other teams
-    .get('/api/courses', () => {
-      return { courses: courses }
-    }),
+    // JSON endpoint - other modules can call this later if they need the
+    // course list (e.g. for enrollment or analytics).
+    .get('/api/courses', () => ({ courses })),
 })
