@@ -12,8 +12,22 @@ import { CSS } from './styles'
 
 // The Course type is declared here because views.ts is the first file that
 // needs to know the shape. index.ts imports it from here (type-only import).
+
 export type Course = {
   id: string
+  code: string
+  title: string
+  description: string
+  capacity: number
+  enrollments: string[]          // student ids — empty for a new course
+  instructorId: string | null    // null = no instructor assigned yet
+  archived: boolean              // false = active, true = hidden from catalogs
+}
+
+// Just the fields a user submits through the <form>. Fields that the system
+// manages (id, enrollments, instructor, archived) are deliberately not here
+// so an edit can't accidentally clobber them.
+export type CourseFormInput = {
   code: string
   title: string
   description: string
