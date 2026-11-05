@@ -22,6 +22,7 @@ import {
   notFoundPage,
   successPage,
   type Course,
+  type CourseFormInput,    // new
 } from './views'
 
 // Where module 2 is mounted, e.g. "/02-courses".
@@ -40,6 +41,9 @@ const courses: Course[] = [
     title: 'Advanced Software Development Tools',
     description: 'Learning Git, Bun, and web development.',
     capacity: 30,
+    enrollments: [],
+    instructorId: null,
+    archived: false,
   },
   {
     id: '2',
@@ -47,6 +51,9 @@ const courses: Course[] = [
     title: 'System Architecture',
     description: 'Designing backend systems and APIs.',
     capacity: 35,
+    enrollments: [],
+    instructorId: null,
+    archived: false,
   },
 ]
 
@@ -55,28 +62,29 @@ const courses: Course[] = [
 const findCourse = (id: string): Course | undefined =>
   courses.find((c) => c.id === id)
 
-// The new id is just courses.length + 1. Ugly but works for a demo. If we ever
-// delete a course we'll get duplicate ids - I'll fix that when we add archive.
-
-function createCourse(input: Omit<Course, 'id'>): Course {
-  const course: Course = { id: String(courses.length + 1), ...input }
+function createCourse(input: CourseFormInput): Course {
+  const course: Course = { 
+    id: crypto.randomUUID(),   // unique forever, no collision with seed '1'/'2'
+    enrollments: [],
+    instructorId: null,
+    archived: false,
+    ...input,
+  }
   courses.push(course)
   return course
 }
 
-function updateCourse(id: string, input: Omit<Course, 'id'>): Course | undefined {
+function updateCourse(id: string, input: CourseFormInput): Course | undefined {
   const course = findCourse(id)
   if (!course) return undefined
-  // Object.assign copies each field from `input` onto `course`, so we don't
-  // have to write five lines like course.code = input.code, etc.
+// Only form fields get copied — enrollments/instructor/archived are untouched.
   Object.assign(course, input)
   return course
 }
-
 // Grabs the fields out of the submitted <form> in one place, so POST /create
 // and POST /:id/edit share the exact same parsing. Also normalises the types:
 // form values are always strings, so capacity has to be converted to Number.
-async function readCourseForm(request: Request): Promise<Omit<Course, 'id'>> {
+async function readCourseForm(request: Request): Promise<CourseFormInput>{
   const form = await request.formData()
   return {
     code: String(form.get('code') ?? '').trim(),
