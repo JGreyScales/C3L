@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "bun --watch src/index.ts",
-    "start": "bun src/index.ts",
+    "start": "docker compose up -d --remove-orphans && bun src/index.ts",
+    "stop": "docker compose down",
     "test": "bun test",
     "lint": "biome lint .",
     "fix": "biome check --write .",
@@ -16,6 +17,7 @@
     "check": "bun run lint && bun run typecheck && bun run test && bun run sanity"
   },
   "dependencies": {
+    "better-auth": "^1.7.7",
     "elysia": "^1.0.0"
   },
   "devDependencies": {
