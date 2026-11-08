@@ -16,6 +16,7 @@
 //   4. Save. Your new page is at  http://localhost:3000/06-gradebook/<your-address>
 import { Elysia } from 'elysia'
 import { defineModule, moduleBase } from '../../core/defineModule'
+import { forwardRequest } from './forward'
 
 const base = moduleBase(import.meta.dir)
 
@@ -35,5 +36,15 @@ export default defineModule({
       `,
     )
     // DEMO: this one line is all it takes to add a page.
-    .get('/hello', () => `<h1>Hello from Module 6</h1><a href="${base}">Back</a>`),
+    .get('/hello', () => `<h1>Hello from Module 6</h1><a href="${base}">Back</a>`)
+
+    .all(
+      '/api/*',
+      ({ request }) =>
+        forwardRequest(request, {
+          target: 'http://127.0.0.1:30600',
+          stripPrefix: `${base}/api`,
+        }),
+      { parse: 'none' }
+    )
 })

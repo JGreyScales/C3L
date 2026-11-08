@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36616.10 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GradebookAPI", "GradebookAPI\GradebookAPI.csproj", "{D9410644-FEA8-4051-91E3-C432E6BCCA60}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D9410644-FEA8-4051-91E3-C432E6BCCA60}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D9410644-FEA8-4051-91E3-C432E6BCCA60}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D9410644-FEA8-4051-91E3-C432E6BCCA60}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D9410644-FEA8-4051-91E3-C432E6BCCA60}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {73FDB0DC-EA81-4C90-8CEE-DCB5DA678FF2}
+	EndGlobalSection
+EndGlobal
