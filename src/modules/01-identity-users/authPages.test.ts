@@ -1,4 +1,4 @@
-// Tests for the pages people use: /register, /login, /profile.
+// Tests for the pages people use: /register, /login, /forgot-password, /reset-password, /profile.
 // These only check the HTML shell (the forms, links and the API paths the <script> calls).
 // router.test.ts already covers the JSON API these pages call with fetch().
 import { expect, test } from 'bun:test'
@@ -35,6 +35,23 @@ test('the login page has a sign-in form and explains a deactivated account', asy
   expect(text).toContain("BASE + '/api/auth/sign-in/email'")
   expect(text).toContain('deactivated')
   expect(text).toContain('/01-identity-users/register') // link between the two pages
+  expect(text).toContain('/01-identity-users/forgot-password') // link to the reset flow
+})
+
+test('the forgot-password page asks for an email and never reveals if it exists', async () => {
+  const { status, text } = await html('/forgot-password')
+  expect(status).toBe(200)
+  expect(text).toContain('<form id="forgot-form">')
+  expect(text).toContain("BASE + '/api/auth/request-password-reset'")
+  expect(text).toContain('/01-identity-users/reset-password') // link to the next step
+})
+
+test('the reset-password page takes a token and a new password', async () => {
+  const { status, text } = await html('/reset-password')
+  expect(status).toBe(200)
+  expect(text).toContain('<form id="reset-form">')
+  expect(text).toContain("BASE + '/api/auth/reset-password'")
+  expect(text).toContain("'/login?reset=1'") // sends people back to log in afterwards
 })
 
 test('the profile page reads /api/me, can save a name and can log out', async () => {

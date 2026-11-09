@@ -129,6 +129,9 @@ export function renderRegisterPage(base: string): string {
 export function renderLoginPage(base: string): string {
   const body = `
     <h1>Log in</h1>
+    <p id="reset-notice" class="message ok" style="display: none">
+      Your password has been reset. Please log in.
+    </p>
     <form id="login-form">
       <label for="email">Email</label>
       <input id="email" type="email" required autocomplete="email">
@@ -139,11 +142,17 @@ export function renderLoginPage(base: string): string {
       <button type="submit">Log in</button>
       <p id="message" class="message"></p>
     </form>
+    <p class="row"><a href="${base}/forgot-password">Forgot your password?</a></p>
     <p class="row">Need an account? <a href="${base}/register">Register</a></p>
     <p class="row"><a href="${base}">Back to Module 1</a></p>
   `
 
   const script = `
+    // The reset-password page sends people here with ?reset=1 when it worked.
+    if (new URLSearchParams(window.location.search).get('reset') === '1') {
+      document.getElementById('reset-notice').style.display = 'block'
+    }
+
     const form = document.getElementById('login-form')
     const message = document.getElementById('message')
     const button = form.querySelector('button')
@@ -180,6 +189,131 @@ export function renderLoginPage(base: string): string {
   `
 
   return page(base, 'Log in - Module 1', body, script)
+}
+
+export function renderForgotPasswordPage(base: string): string {
+  const body = `
+    <h1>Forgot your password?</h1>
+    <p class="muted">
+      There is no email service in this school project: if the address has an account, a reset
+      token is printed in the console where the server runs. Copy it into the
+      <a href="${base}/reset-password">reset password</a> page.
+    </p>
+    <form id="forgot-form">
+      <label for="email">Email</label>
+      <input id="email" type="email" required autocomplete="email">
+
+      <button type="submit">Send reset token</button>
+      <p id="message" class="message"></p>
+    </form>
+    <p class="row">Already have a token? <a href="${base}/reset-password">Reset your password</a></p>
+    <p class="row"><a href="${base}/login">Back to log in</a></p>
+  `
+
+  const script = `
+    const form = document.getElementById('forgot-form')
+    const message = document.getElementById('message')
+    const button = form.querySelector('button')
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault()
+      const email = document.getElementById('email').value.trim()
+
+      button.disabled = true
+      try {
+        const response = await fetch(BASE + '/api/auth/request-password-reset', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ email }),
+        })
+        if (response.ok) {
+          // Better Auth answers the same way whether or not the email has an account, on
+          // purpose, so nobody can use this form to find out who is registered.
+          showMessage(
+            message,
+            'If that email has an account, a reset token was printed in the server console.',
+            false,
+          )
+          return
+        }
+        const data = await response.json().catch(() => ({}))
+        showMessage(message, data.message || 'Please enter a valid email address.', true)
+      } catch {
+        showMessage(message, 'Network error. Please try again.', true)
+      } finally {
+        button.disabled = false
+      }
+    })
+  `
+
+  return page(base, 'Forgot password - Module 1', body, script)
+}
+
+export function renderResetPasswordPage(base: string): string {
+  const body = `
+    <h1>Reset your password</h1>
+    <form id="reset-form">
+      <label for="token">Reset token</label>
+      <input id="token" type="text" required autocomplete="one-time-code">
+      <p class="muted">Printed in the server console after "Forgot your password?".</p>
+
+      <label for="password">New password</label>
+      <input id="password" type="password" required minlength="8" autocomplete="new-password">
+
+      <label for="confirm">Confirm new password</label>
+      <input id="confirm" type="password" required minlength="8" autocomplete="new-password">
+
+      <button type="submit">Reset password</button>
+      <p id="message" class="message"></p>
+    </form>
+    <p class="row"><a href="${base}/forgot-password">Need a new token?</a></p>
+    <p class="row"><a href="${base}/login">Back to log in</a></p>
+  `
+
+  const script = `
+    // Pre-fills the token if it ever arrives as a link, e.g. ?token=abc123.
+    const fromQuery = new URLSearchParams(window.location.search).get('token')
+    if (fromQuery) document.getElementById('token').value = fromQuery
+
+    const form = document.getElementById('reset-form')
+    const message = document.getElementById('message')
+    const button = form.querySelector('button')
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault()
+      const token = document.getElementById('token').value.trim()
+      const password = document.getElementById('password').value
+      const confirm = document.getElementById('confirm').value
+
+      if (password !== confirm) {
+        showMessage(message, 'Passwords do not match.', true)
+        return
+      }
+
+      button.disabled = true
+      try {
+        const response = await fetch(BASE + '/api/auth/reset-password', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ token, newPassword: password }),
+        })
+        if (response.ok) {
+          window.location.href = BASE + '/login?reset=1'
+          return
+        }
+        const data = await response.json().catch(() => ({}))
+        showMessage(message, data.message || 'That token is invalid or expired.', true)
+      } catch {
+        showMessage(message, 'Network error. Please try again.', true)
+      } finally {
+        button.disabled = false
+      }
+    })
+  `
+
+  return page(base, 'Reset password - Module 1', body, script)
 }
 
 export function renderProfilePage(base: string): string {

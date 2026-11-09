@@ -15,6 +15,10 @@ like another module would:
 - `/01-identity-users/register` - create an account (always as a Student; an Admin promotes
   people to Instructor or Admin afterwards from the `/api/users/:id/role` endpoint).
 - `/01-identity-users/login` - sign in. A deactivated account is turned away here.
+- `/01-identity-users/forgot-password` - ask for a reset token. There is no email service, so
+  it is printed in the console where the server runs (same answer whether or not the email has
+  an account, so the form cannot be used to find out who is registered).
+- `/01-identity-users/reset-password` - paste that token and set a new password.
 - `/01-identity-users/profile` - the signed-in user's own name, email, role and active flag,
   with a form to change the name and a "Log out" button.
 
