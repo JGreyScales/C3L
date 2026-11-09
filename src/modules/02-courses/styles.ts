@@ -45,10 +45,16 @@ export const CSS = `
     margin-bottom: 12px;
   }
   form input,
-  form textarea {
+  form textarea,
+  form select {
     width: 100%;
     padding: 6px;
     box-sizing: border-box;
+  }
+
+  /* the instructor picker sits under the edit form, so give it some room */
+  .assign-form {
+    margin-top: 8px;
   }
   form button {
     padding: .5rem 1rem;
