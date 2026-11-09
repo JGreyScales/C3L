@@ -2,7 +2,8 @@
 import { escapeHtml } from '../../core/pages'
 import { type Endpoint, ENDPOINTS } from './endpoints'
 
-const STYLE = `
+/** Shared with authPages.ts, so every page in this module looks the same. */
+export const STYLE = `
   body { font-family: system-ui, sans-serif; max-width: 1100px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
   table { border-collapse: collapse; width: 100%; }
   th, td { text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid #8884; }
@@ -43,6 +44,11 @@ export function renderFrontPage(base: string): string {
           Registration, login and logout, password reset, profiles, roles (student, instructor,
           admin) and account activation. Everything is an endpoint that returns JSON, so the
           other modules can use it.
+        </p>
+        <p>
+          <a href="${escapeHtml(base)}/register">Create an account</a> &middot;
+          <a href="${escapeHtml(base)}/login">Log in</a> &middot;
+          <a href="${escapeHtml(base)}/profile">My profile</a>
         </p>
         <p>
           <a href="${escapeHtml(base)}/docs">Try the endpoints in Swagger UI</a>
