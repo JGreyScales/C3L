@@ -8,13 +8,17 @@
 //   - Role management (Student, Instructor, Admin)
 //   - Account activation/deactivation
 //
-// HOW TO ADD A PAGE TO THE ROUTER (basic demo):
-//   1. Find the router at the bottom of this file.
-//   2. Copy the  .get('/hello', ...)  line.
-//   3. Change the address ('/hello') and the HTML it returns.
-//   4. Save. Your new page is at  http://localhost:3000/01-identity-users/<your-address>
-import { Elysia } from 'elysia'
+// How it is built (see README.md in this folder for setup and notes):
+//   router.ts     the routes: /api/auth/* (Better Auth), /api/me, /api/users/..., /docs
+//   endpoints.ts  the list of endpoints (front page table and Swagger UI are made from it)
+//   openapi.ts    turns that list into the OpenAPI description for Swagger UI
+//   auth.ts       the Better Auth settings (email + password, secret)
+//   roles.ts      the three roles
+//   jsonFile.ts   keeps users and password hashes in data/users.json instead of a database
+//   pages.ts      the front page and the Swagger UI page
+import { join } from 'node:path'
 import { defineModule, moduleBase } from '../../core/defineModule'
+import { createRouter } from './router'
 
 const base = moduleBase(import.meta.dir)
 
@@ -22,17 +26,8 @@ export default defineModule({
   name: 'Module 1: Identity & User Management',
   description: 'Registration, login, password reset, profiles, roles',
 
-  router: new Elysia()
-    // Front page of this module. The button on the home page opens it.
-    .get(
-      '/',
-      () => `
-        <h1>Module 1: Identity &amp; User Management</h1>
-        <p>It works! Replace this page with your own.</p>
-        <p><a href="${base}/hello">Demo page</a></p>
-        <p><a href="/">Back to the home page</a></p>
-      `,
-    )
-    // DEMO: this one line is all it takes to add a page.
-    .get('/hello', () => `<h1>Hello from Module 1</h1><a href="${base}">Back</a>`),
+  router: createRouter({
+    mountPath: base,
+    usersFile: join(import.meta.dir, 'data', 'users.json'),
+  }),
 })

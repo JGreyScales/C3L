@@ -1,0 +1,2 @@
+# The real user file (emails and password hashes). Never commit this.
+data/
