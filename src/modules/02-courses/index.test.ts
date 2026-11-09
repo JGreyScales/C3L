@@ -38,7 +38,6 @@ test('JSON API works', async () => {
     expect(Array.isArray(data.courses)).toBe(true)
     expect(data.courses.length).toBeGreaterThan(0)
 })
-
 // ---- Instructor assignment ----
 // Helpers for the assign-instructor tests. The course data lives in memory, so
 // these tests use the seeded course '1' and read the result back through the
@@ -114,4 +113,34 @@ test('Editing course details does not wipe the assigned instructor', async () =>
         capacity: '40',
     })
     expect(await instructorOf('2')).toBe('inst-1')
+})
+
+test('Edit page form has every course field, so saving it keeps them', async () => {
+    const html = await (await get('/2/edit')).text()
+    // only look at the first form (the course form), not the instructor picker
+    const courseForm = html.split('</form>')[0] ?? ''
+
+    for (const name of ['code', 'title', 'description', 'capacity']) {
+        expect(courseForm).toContain(`name="${name}"`)
+    }
+
+    // Submit the form the way a browser would: send exactly the fields the HTML
+    // contains. If an input is missing from the page, it is missing here too,
+    // and the course would lose that value.
+    const fields: Record<string, string> = {}
+    for (const m of courseForm.matchAll(/<input[^>]*name="(\w+)"[^>]*value="([^"]*)"/g)) {
+        fields[m[1] as string] = m[2] as string
+    }
+    const textarea = courseForm.match(/<textarea name="description"[^>]*>([^<]*)<\/textarea>/)
+    if (textarea) fields.description = textarea[1] as string
+
+    const response = await postForm('/2/edit', fields)
+    expect(response.status).toBe(200)
+
+    const data = (await (await get('/api/courses')).json()) as {
+        courses: Array<{ id: string; title: string; description: string }>
+    }
+    const course = data.courses.find((c) => c.id === '2')
+    expect(course?.title).toBe('System Architecture')
+    expect(course?.description).toBe('Designing backend systems and APIs.')
 })
