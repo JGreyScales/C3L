@@ -31,9 +31,9 @@ export default defineModule({
             () => `
         <h1>Module 7: Discussion Forum System</h1>
        <p>
-  <a href="http://localhost:30707/DiscussionBoard">
-    Open Discussion Forum
-  </a>
+ <a href="http://localhost:30707/Courses">
+    Course Discussion Boards
+</a>
 </p>
         <p><a href="${base}/hello">Demo page</a></p>
       `,
