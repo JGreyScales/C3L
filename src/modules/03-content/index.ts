@@ -14,8 +14,10 @@
 //   4. Save. Your new page is at  http://localhost:3000/03-content/<your-address>
 import { Elysia } from 'elysia'
 import { defineModule, moduleBase } from '../../core/defineModule'
+import { contentUiRoutes } from './content.ui'
 import { moduleCreateRoutes } from './module.create.routes'
 import { moduleListRoutes } from './module.list.routes'
+import { moduleOrganizeRoutes } from './module.organize.routes'
 
 const base = moduleBase(import.meta.dir)
 
@@ -26,12 +28,15 @@ export default defineModule({
   router: new Elysia()
     .use(moduleCreateRoutes)
     .use(moduleListRoutes)
+    .use(moduleOrganizeRoutes)
+    .use(contentUiRoutes)
     // Front page of this module. The button on the home page opens it.
     .get(
       '/',
       () => `
         <h1>Module 3: Content Management</h1>
         <p>It works! Replace this page with your own.</p>
+        <p><a href="${base}/manage"><strong>Manage learning modules</strong></a></p>
         <p><a href="${base}/hello">Demo page</a></p>
         <p><a href="/">Back to the home page</a></p>
       `,
