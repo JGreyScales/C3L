@@ -2,7 +2,7 @@
 import { escapeHtml } from '../../core/pages'
 import { type Endpoint, ENDPOINTS } from './endpoints'
 
-const STYLE = `
+export const STYLE = `
   body { font-family: system-ui, sans-serif; max-width: 1100px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
   table { border-collapse: collapse; width: 100%; }
   th, td { text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid #8884; }
