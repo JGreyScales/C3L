@@ -60,7 +60,7 @@ describe('Content management page HTML', () => {
   })
 
   test.each([
-    '\"><script>alert(1)</script><input value="',
+    '"><script>alert(1)</script><input value="',
     "' autofocus onfocus='alert(1)",
     '</script><img src=x onerror=alert(1)>',
     'COURSE&<topic>"\'',
