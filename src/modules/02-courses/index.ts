@@ -21,6 +21,7 @@ import {
   editPage,
   notFoundPage,
   successPage,
+  enrollPage,
   type Course,
   type CourseFormInput,    // new
 } from './views'
@@ -131,6 +132,28 @@ export default defineModule({
       if (!updated) return notFoundPage(base)
       return successPage(base, 'Course Updated Successfully!')
     })
+
+    //enroll
+    .get('/enroll', () => enrollPage(base,courses))
+
+        // handle the enroll form submit
+    .post('/:id/enroll', async ({ params, request }) => {
+      const course = findCourse(params.id)
+      if (!course) return notFoundPage(base)
+
+      const form = await request.formData()
+      const studentId = String(form.get('studentId') ?? '').trim()
+
+      if (!studentId) return notFoundPage(base, 'Student ID is required')
+      if (course.enrollments.includes(studentId))
+        return notFoundPage(base, 'Student is already enrolled')
+      if (course.enrollments.length >= course.capacity)
+        return notFoundPage(base, 'Course is full')
+
+      course.enrollments.push(studentId)
+      return successPage(base, 'Student Enrolled Successfully!')
+    })
+
 
     // JSON endpoint - other modules can call this later if they need the
     // course list (e.g. for enrollment or analytics).
