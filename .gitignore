@@ -1,0 +1,14 @@
+# Installed packages (created by `bun install`, never commit this folder)
+node_modules/
+
+# Secrets and local settings
+.env
+.env.*
+
+# Logs and OS junk
+*.log
+.DS_Store
+Thumbs.db
+
+# Temporary folders created while the tests run
+tests/.tmp-*/
