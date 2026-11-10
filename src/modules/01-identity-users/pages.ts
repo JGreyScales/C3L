@@ -45,6 +45,11 @@ export function renderFrontPage(base: string): string {
           other modules can use it.
         </p>
         <p>
+          <a href="${escapeHtml(base)}/register">Create an account</a> &middot;
+          <a href="${escapeHtml(base)}/login">Log in</a> &middot;
+          <a href="${escapeHtml(base)}/profile">My profile</a>
+        </p>
+        <p>
           <a href="${escapeHtml(base)}/docs">Try the endpoints in Swagger UI</a>
           (the raw description is <a href="${escapeHtml(base)}/openapi.json">openapi.json</a>)
         </p>
