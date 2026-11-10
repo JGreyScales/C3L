@@ -7,6 +7,24 @@ other modules can use it. The list of endpoints is on the module's front page,
 `http://localhost:3000/01-identity-users/docs` (it loads from a CDN, so the browser needs
 internet). The raw description is at `/01-identity-users/openapi.json`.
 
+## Pages for people
+
+Three plain black-and-white pages sit on top of the JSON API, calling it with `fetch()` exactly
+like another module would:
+
+- `/01-identity-users/register` - create an account (always as a Student; an Admin promotes
+  people to Instructor or Admin afterwards from the `/api/users/:id/role` endpoint).
+- `/01-identity-users/login` - sign in. A deactivated account is turned away here.
+- `/01-identity-users/forgot-password` - ask for a reset token. There is no email service, so
+  it is printed in the console where the server runs (same answer whether or not the email has
+  an account, so the form cannot be used to find out who is registered).
+- `/01-identity-users/reset-password` - paste that token and set a new password.
+- `/01-identity-users/profile` - the signed-in user's own name, email, role and active flag,
+  with a form to change the name and a "Log out" button.
+
+There is no admin page yet: for now, an Admin activates, deactivates or re-roles accounts
+through Swagger UI (`/01-identity-users/docs`) using `/api/users`.
+
 ## One-time setup
 
 This module needs the `better-auth` package. Adding a dependency changes `package.json` and
@@ -53,4 +71,5 @@ bun add better-auth
 | `roles.ts` | The three roles |
 | `jsonFile.ts` | Saves and loads the users file |
 | `pages.ts` | The front page and the Swagger UI page |
+| `authPages.ts` | The pages people use: `/register`, `/login`, `/profile` |
 | `*.test.ts` | Tests (`bun run test`). They use a temporary users file |
