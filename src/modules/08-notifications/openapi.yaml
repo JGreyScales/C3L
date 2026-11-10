@@ -1,0 +1,501 @@
+openapi: 3.0.3
+info:
+  title: Module 8 - Notifications & Messaging
+  version: 1.0.0
+  description: |
+    Notifications and direct messaging for the C3L LMS.
+
+    - The logged-in user comes from the session (Module 1). "me" = that user.
+    - All IDs are strings. All times are ISO 8601 UTC, e.g. "2026-10-19T16:40:00Z".
+    - Success with nothing to return is 204 No Content (empty body).
+    - Every error returns `{ "error": "plain-language reason" }`.
+servers:
+  - url: /08-notifications
+
+tags:
+  - name: Notifications
+  - name: Direct Messages
+  - name: Pages
+    description: HTML pages (not JSON)
+
+paths:
+
+  # ============================ NOTIFICATIONS ============================
+
+  /api/notifications/subscribe:
+    post:
+      tags: [Notifications]
+      summary: Turn event types back ON for a course
+      description: Removes the given event types from the user's muted list for this course.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreferenceChange'
+      responses:
+        '204':
+          description: Success
+        '400':
+          description: event_type is empty or has an unknown type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/notifications/unsubscribe:
+    patch:
+      tags: [Notifications]
+      summary: Turn event types OFF for a course
+      description: Adds the given event types to the user's muted list for this course.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreferenceChange'
+      responses:
+        '204':
+          description: Success
+        '400':
+          description: event_type is empty or has an unknown type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/notifications/events:
+    post:
+      tags: [Notifications]
+      summary: Send an event from another module
+      description: user_ids is required when event_type is "grade", ignored otherwise.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [event_type, course_id, content]
+              properties:
+                event_type:
+                  $ref: '#/components/schemas/EventType'
+                course_id:
+                  type: string
+                  example: course-123
+                user_ids:
+                  type: array
+                  items:
+                    type: string
+                  example: [user-7, user-9]
+                content:
+                  $ref: '#/components/schemas/Content'
+      responses:
+        '204':
+          description: Success
+        '400':
+          description: event_type is "grade" and user_ids is missing or empty
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/users/me/notificationPreferences:
+    get:
+      tags: [Notifications]
+      summary: Get my muted event types per course
+      responses:
+        '200':
+          description: Event types that are OFF (muted) for each course
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    course_id:
+                      type: string
+                      example: course-123
+                    event_types:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/EventType'
+                      example: [grade, quiz]
+
+  /api/users/me/notifications:
+    get:
+      tags: [Notifications]
+      summary: Get my notifications (bell icon), newest first
+      responses:
+        '200':
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    notification_id:
+                      type: string
+                      example: notif-555
+                    event_type:
+                      $ref: '#/components/schemas/EventType'
+                    course_id:
+                      type: string
+                      example: course-123
+                    content:
+                      $ref: '#/components/schemas/Content'
+                    created_at:
+                      type: string
+                      format: date-time
+                      example: '2026-10-19T16:40:00Z'
+                    read_at:
+                      type: string
+                      format: date-time
+                      nullable: true
+                      description: null = unread
+                      example: null
+
+  /api/courses/{course_id}/announcements:
+    get:
+      tags: [Notifications]
+      summary: Get a course's announcements, newest first
+      parameters:
+        - name: course_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: course-123
+      responses:
+        '200':
+          description: List of announcements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    notification_id:
+                      type: string
+                      example: notif-600
+                    content:
+                      $ref: '#/components/schemas/Content'
+                    created_at:
+                      type: string
+                      format: date-time
+                      example: '2026-10-18T13:00:00Z'
+
+  /api/notifications/{notificationId}:
+    patch:
+      tags: [Notifications]
+      summary: Mark a notification read
+      description: The server sets the read time.
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: notif-555
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [read]
+              properties:
+                read:
+                  type: boolean
+                  example: true
+      responses:
+        '204':
+          description: Success
+        '403':
+          description: It isn't one of your notifications
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Notification doesn't exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ============================ DIRECT MESSAGES ============================
+
+  /api/directMessageCreation:
+    post:
+      tags: [Direct Messages]
+      summary: Create a new conversation (plus button)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recipients_emails]
+              properties:
+                group_name:
+                  type: string
+                  description: Required if more than one recipient
+                  example: Study group
+                recipients_emails:
+                  type: array
+                  description: Depends on the login module
+                  items:
+                    type: string
+                  example: [a@school.ca, b@school.ca]
+      responses:
+        '200':
+          description: A 1:1 conversation with this person already exists; its ID is returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationId'
+        '201':
+          description: Conversation created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationId'
+        '400':
+          description: No recipients, or a group with no name
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/directMessage/{conversationId}:
+    post:
+      tags: [Direct Messages]
+      summary: Send a message (send button)
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: conv-42
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message:
+                  type: string
+                  example: See you at 3
+      responses:
+        '204':
+          description: Success
+        '400':
+          description: Message is empty
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: You're not a member (or you've left)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/directMessage/unsubscribe/{conversation_id}:
+    patch:
+      tags: [Direct Messages]
+      summary: Leave a conversation (X button)
+      description: Sets left_at. No body needed.
+      parameters:
+        - name: conversation_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: conv-42
+      responses:
+        '204':
+          description: Success
+        '403':
+          description: You're not a member
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/me/converstations:
+    get:
+      tags: [Direct Messages]
+      summary: Get my conversations, newest first
+      responses:
+        '200':
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    conversation_id:
+                      type: string
+                      example: conv-42
+                    type:
+                      type: string
+                      enum: [direct, group]
+                      example: group
+                    name:
+                      type: string
+                      nullable: true
+                      description: null for 1:1
+                      example: Study group
+                    unread_count:
+                      type: integer
+                      example: 3
+                    last_message_at:
+                      type: string
+                      format: date-time
+                      example: '2026-10-19T16:50:00Z'
+
+  /api/conversations/{conversationId}/messages:
+    get:
+      tags: [Direct Messages]
+      summary: Get the messages in a conversation, oldest first
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: conv-42
+      responses:
+        '200':
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    message_id:
+                      type: string
+                      example: msg-900
+                    sender_id:
+                      type: string
+                      example: user-7
+                    body:
+                      type: string
+                      example: See you at 3
+                    created_at:
+                      type: string
+                      format: date-time
+                      example: '2026-10-19T16:50:00Z'
+        '403':
+          description: You're not a member
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ============================ PAGES (HTML) ============================
+
+  /preferences:
+    get:
+      tags: [Pages]
+      summary: Notification preferences page
+      responses:
+        '200':
+          $ref: '#/components/responses/HtmlPage'
+
+  /bellWidget:
+    get:
+      tags: [Pages]
+      summary: Bell widget page
+      responses:
+        '200':
+          $ref: '#/components/responses/HtmlPage'
+
+  /notifications/{notificationId}:
+    get:
+      tags: [Pages]
+      summary: Single notification page
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          $ref: '#/components/responses/HtmlPage'
+
+  /directMessage:
+    get:
+      tags: [Pages]
+      summary: Direct message page
+      responses:
+        '200':
+          $ref: '#/components/responses/HtmlPage'
+
+components:
+  schemas:
+    EventType:
+      type: string
+      enum: [grade, quiz, discussion, assignment, announcement, content]
+
+    Content:
+      type: object
+      required: [subject, message]
+      properties:
+        subject:
+          type: string
+          example: Assignment 2 graded
+        message:
+          type: string
+          example: Your grade is posted.
+
+    PreferenceChange:
+      type: object
+      required: [course_id, event_type]
+      properties:
+        course_id:
+          type: string
+          description: The course button that got clicked
+          example: course-123
+        event_type:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/EventType'
+          example: [grade, quiz]
+
+    ConversationId:
+      type: object
+      properties:
+        conversation_id:
+          type: string
+          example: conv-42
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: plain-language reason
+
+  responses:
+    HtmlPage:
+      description: HTML page
+      content:
+        text/html:
+          schema:
+            type: string
