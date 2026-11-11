@@ -66,21 +66,27 @@ function layout(opts: { base: string; pageTitle: string; body: string }): string
 // return. If I need to change what a page looks like, I only touch one function.
 
 // Dashboard: list of all courses as cards, plus the two action buttons.
-export function dashboardPage(base: string, courses: Course[]): string {
-    // .map + .join is basically a for loop that builds an array of strings and
-    // then glues them together. Every course becomes one .card <div>.
-    const cards = courses
-        .map((c) => {
-            return `
-      <div class="card">
-        <h3>${escapeHtml(c.code)}: ${escapeHtml(c.title)}</h3>
+export function dashboardPage(base: string, courses: Course[], showArchived = false): string {
+  const visible = showArchived ? courses : courses.filter((c) => !c.archived)
+    const cards = visible
+  .map((c) => {
+    const archivedBadge = c.archived ? ' <span class="badge">ARCHIVED</span>' : ''
+    const archiveLabel = c.archived ? 'Unarchive' : 'Archive'
+    const archiveAction = c.archived ? 'unarchive' : 'archive'
+
+    return `
+      <div class="card${c.archived ? ' archived' : ''}">
+        <h3>${escapeHtml(c.code)}: ${escapeHtml(c.title)}${archivedBadge}</h3>
         <p>Enrolled: ${c.enrollments.length} / ${c.capacity}</p>
         <p>${escapeHtml(c.description)}</p>
         <p>Capacity: ${c.capacity}</p>
         <a href="${base}/${c.id}/edit">Edit Course</a>
+        <form method="POST" action="${base}/${c.id}/${archiveAction}" class="inline-form">
+          <button type="submit">${archiveLabel}</button>
+        </form>
       </div>`
-        })
-        .join('')
+  })
+  .join('')
 
     return layout({
         base,
@@ -91,7 +97,9 @@ export function dashboardPage(base: string, courses: Course[]): string {
         <a class="btn" href="${base}/create">Create New Course</a>
         <a class="btn" href="${base}/catalog">View Catalog</a>
         <a class="btn" href="${base}/enroll">Enrollment</a>
-
+        <a class="btn" href="${base}?archived=${showArchived ? '0' : '1'}">
+        ${showArchived ? 'Hide Archived' : 'Show Archived'}
+        </a>
       </p>
       <h2>All Courses</h2>
       ${cards}
@@ -100,12 +108,12 @@ export function dashboardPage(base: string, courses: Course[]): string {
 }
 
 // Catalog: read-only list. No edit links, no buttons. Just the courses.
+// archived courses shouldn't appear in the public catalog by default.
 export function catalogPage(base: string, courses: Course[]): string {
-    const items = courses
-        .map((c) => {
-            return `<li><strong>${escapeHtml(c.code)}</strong> - ${escapeHtml(c.title)}</li>`
-        })
-        .join('')
+    const active = courses.filter((c) => !c.archived)
+    const items = active
+    .map((c) => `<li><strong>${escapeHtml(c.code)}</strong> - ${escapeHtml(c.title)}</li>`)
+    .join('')
 
     return layout({
         base,

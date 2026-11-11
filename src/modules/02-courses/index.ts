@@ -134,7 +134,12 @@ export default defineModule({
 
   router: new Elysia()
     // dashboard
-    .get('/', () => dashboardPage(base, courses))
+    // query comes pre-parsed by Elysia — it's an object of all query-string params, 
+    // so ?archived=1 becomes { archived: '1' }, and query.archived is the string '1'
+    .get('/', ({ query }) => {
+      const showArchived = query.archived === '1'
+      return dashboardPage(base, courses, showArchived)
+    })
 
     // read-only catalog
     .get('/catalog', () => catalogPage(base, courses))
@@ -198,6 +203,30 @@ export default defineModule({
 
       course.enrollments.push(studentId)
       return successPage(base, 'Student Enrolled Successfully!')
+    })
+
+    // ---- Archive ----
+    // Two tiny routes so archiving and un-archiving use the same pattern.
+    // The dashboard hides archived courses by default; this toggles the flag.
+
+    .post('/:id/archive', ({ params, set }) => {
+      const course = findCourse(params.id)
+      if (!course) {
+        set.status = 404
+        return notFoundPage(base)
+      }
+      course.archived = true
+      return successPage(base, `${course.code} archived`)
+    })
+
+    .post('/:id/unarchive', ({ params, set }) => {
+      const course = findCourse(params.id)
+      if (!course) {
+        set.status = 404   // Uses set.status = 404 for missing course, same pattern as assign-instructor
+        return notFoundPage(base)
+      }
+      course.archived = false
+      return successPage(base, `${course.code} restored to active`)
     })
 
     // JSON endpoint - other modules can call this later if they need the
