@@ -15,15 +15,16 @@
 import { Elysia } from 'elysia'
 import { defineModule, moduleBase } from '../../core/defineModule'
 import {
-    catalogPage,
-    createPage,
-    dashboardPage,
-    editPage,
-    notFoundPage,
-    successPage,
-    type Course,
-    type CourseFormInput,    // new
-    type Instructor,
+  catalogPage,
+  createPage,
+  dashboardPage,
+  editPage,
+  notFoundPage,
+  successPage,
+  enrollPage,
+  type Course,
+  type CourseFormInput,    // new  
+  type Instructor,
 } from './views'
 
 // Where module 2 is mounted, e.g. "/02-courses".
@@ -128,57 +129,78 @@ async function readCourseForm(request: Request): Promise<CourseFormInput> {
 // The functions themselves are in views.ts.
 
 export default defineModule({
-    name: 'Module 2: Course Management',
-    description: 'Courses, catalog, enrollment',
+  name: 'Module 2: Course Management',
+  description: 'Courses, catalog, enrollment',
 
-    router: new Elysia()
-        // dashboard
-        .get('/', () => dashboardPage(base, courses))
+  router: new Elysia()
+    // dashboard
+    .get('/', () => dashboardPage(base, courses))
 
-        // read-only catalog
-        .get('/catalog', () => catalogPage(base, courses))
+    // read-only catalog
+    .get('/catalog', () => catalogPage(base, courses))
 
-        // show the "create a course" form
-        .get('/create', () => createPage(base))
+    // show the "create a course" form
+    .get('/create', () => createPage(base))
 
-        // handle the form submit. After saving we show a success page.
-        .post('/create', async ({ request }) => {
-            createCourse(await readCourseForm(request))
-            return successPage(base, 'Course Created Successfully!')
-        })
+    // handle the form submit. After saving we show a success page.
+    .post('/create', async ({ request }) => {
+      createCourse(await readCourseForm(request))
+      return successPage(base, 'Course Created Successfully!')
+    })
 
-        // show the edit form for one course
-        .get('/:id/edit', ({ params }) => {
-            const course = findCourse(params.id)
-            if (!course) return notFoundPage(base)
-            return editPage(base, course, instructors)
-        })
+    // show the edit form for one course
+    .get('/:id/edit', ({ params }) => {
+      const course = findCourse(params.id)
+      if (!course) return notFoundPage(base)
+      return editPage(base, course, instructors)   // ← keep main's version (3rd arg)
+    })
 
-        // handle the edit form submit
-        .post('/:id/edit', async ({ params, request }) => {
-            const updated = updateCourse(params.id, await readCourseForm(request))
-            if (!updated) return notFoundPage(base)
-            return successPage(base, 'Course Updated Successfully!')
-        })
+    // handle the edit form submit
+    .post('/:id/edit', async ({ params, request }) => {
+      const updated = updateCourse(params.id, await readCourseForm(request))
+      if (!updated) return notFoundPage(base)
+      return successPage(base, 'Course Updated Successfully!')
+    })
 
-        // handle the instructor picker. An empty value means "Unassigned".
-        .post('/:id/assign-instructor', async ({ params, request, set }) => {
-            const form = await request.formData()
-            const value = String(form.get('instructorId') ?? '').trim()
+    // handle the instructor picker. An empty value means "Unassigned".  ← from main
+    .post('/:id/assign-instructor', async ({ params, request, set }) => {
+      const form = await request.formData()
+      const value = String(form.get('instructorId') ?? '').trim()
 
-            const result = assignInstructor(params.id, value === '' ? null : value)
-            if (result === 'not-found') {
-                set.status = 404
-                return notFoundPage(base)
-            }
-            if (result === 'invalid-instructor') {
-                set.status = 400
-                return notFoundPage(base, 'Instructor not found')
-            }
-            return successPage(base, 'Instructor Assigned Successfully!')
-        })
+      const result = assignInstructor(params.id, value === '' ? null : value)
+      if (result === 'not-found') {
+        set.status = 404
+        return notFoundPage(base)
+      }
+      if (result === 'invalid-instructor') {
+        set.status = 400
+        return notFoundPage(base, 'Instructor not found')
+      }
+      return successPage(base, 'Instructor Assigned Successfully!')
+    })
 
-        // JSON endpoint - other modules can call this later if they need the
-        // course list (e.g. for enrollment or analytics).
-        .get('/api/courses', () => ({ courses })),
+    // enrollment page (list + per-course enroll forms)  ← from A
+    .get('/enroll', () => enrollPage(base, courses))
+
+    // handle the enroll form submit  ← from A
+    .post('/:id/enroll', async ({ params, request }) => {
+      const course = findCourse(params.id)
+      if (!course) return notFoundPage(base)
+
+      const form = await request.formData()
+      const studentId = String(form.get('studentId') ?? '').trim()
+
+      if (!studentId) return notFoundPage(base, 'Student ID is required')
+      if (course.enrollments.includes(studentId))
+        return notFoundPage(base, 'Student is already enrolled')
+      if (course.enrollments.length >= course.capacity)
+        return notFoundPage(base, 'Course is full')
+
+      course.enrollments.push(studentId)
+      return successPage(base, 'Student Enrolled Successfully!')
+    })
+
+    // JSON endpoint - other modules can call this later if they need the
+    // course list (e.g. for enrollment or analytics).
+    .get('/api/courses', () => ({ courses })),
 })

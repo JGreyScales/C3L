@@ -74,6 +74,7 @@ export function dashboardPage(base: string, courses: Course[]): string {
             return `
       <div class="card">
         <h3>${escapeHtml(c.code)}: ${escapeHtml(c.title)}</h3>
+        <p>Enrolled: ${c.enrollments.length} / ${c.capacity}</p>
         <p>${escapeHtml(c.description)}</p>
         <p>Capacity: ${c.capacity}</p>
         <a href="${base}/${c.id}/edit">Edit Course</a>
@@ -89,6 +90,8 @@ export function dashboardPage(base: string, courses: Course[]): string {
       <p class="actions">
         <a class="btn" href="${base}/create">Create New Course</a>
         <a class="btn" href="${base}/catalog">View Catalog</a>
+        <a class="btn" href="${base}/enroll">Enrollment</a>
+
       </p>
       <h2>All Courses</h2>
       ${cards}
@@ -203,6 +206,31 @@ export function notFoundPage(base: string, message = 'Course not found'): string
         pageTitle: 'Not Found',
         body: `
       <h1>${escapeHtml(message)}</h1>
+      <p><a href="${base}">Back to Dashboard</a></p>
+    `,
+         })
+}
+// Enrollment page: a card per course with an inline "Enroll" form.
+export function enrollPage(base: string, courses: Course[]): string {
+    const forms = courses
+        .map((c) => {
+            return `
+      <div class="card">
+        <h3>${escapeHtml(c.code)}: ${escapeHtml(c.title)}</h3>
+        <p>Enrolled: ${c.enrollments.length} / ${c.capacity}</p>
+        <form method="POST" action="${base}/${c.id}/enroll">
+          <label>Student ID<br /><input type="text" name="studentId" required /></label>
+          <button type="submit">Enroll</button>
+        </form>
+      </div>`
+        })
+        .join('')
+    return layout({
+        base,
+        pageTitle: 'Student Enrollment',
+        body: `
+    <h1>Student Enrollment</h1>
+     ${forms}
       <p><a href="${base}">Back to Dashboard</a></p>
     `,
     })
