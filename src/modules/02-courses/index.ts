@@ -8,12 +8,13 @@
 //   - Edit course information          (done)
 //   - Course settings                  (only capacity so far, will extend later)
 //   - Course catalog                   (done)
-//   - Student enrollment               (not done yet)
+//   - Student enrollment               (done)
 //   - Instructor assignment to courses (done)
-//   - Archive active/inactive courses  (not done yet)
+//   - Archive active/inactive courses  (done)
 
 import { Elysia } from 'elysia'
 import { defineModule, moduleBase } from '../../core/defineModule'
+import { docsPage } from './docsPage'
 import {
   catalogPage,
   createPage,
@@ -228,6 +229,15 @@ export default defineModule({
       course.archived = false
       return successPage(base, `${course.code} restored to active`)
     })
+
+    // Serve the OpenAPI spec file so Swagger UI can fetch it.
+    .get('/openapi.yaml', () =>
+      Bun.file(`${import.meta.dir}/openapi.yaml`)
+    )
+
+    // Swagger UI page that renders the above spec.
+    // Modelled on Module 8's /08-notifications/docs.
+    .get('/docs', () => docsPage(base))
 
     // JSON endpoint - other modules can call this later if they need the
     // course list (e.g. for enrollment or analytics).

@@ -100,6 +100,7 @@ export function dashboardPage(base: string, courses: Course[], showArchived = fa
         <a class="btn" href="${base}?archived=${showArchived ? '0' : '1'}">
         ${showArchived ? 'Hide Archived' : 'Show Archived'}
         </a>
+        <a class="btn" href="${base}/docs" style="background:#666">API Docs</a>
       </p>
       <h2>All Courses</h2>
       ${cards}
