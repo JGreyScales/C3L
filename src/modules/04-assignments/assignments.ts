@@ -1,57 +1,61 @@
+import type { Database } from 'bun:sqlite'
+import { db } from './db/database'
+import { getAssignment, listAssignments, saveAssignment, type AssignmentRecord } from './db/repository'
+
+/** Legacy Sprint 1 presentation model. The single persisted deadline is dueAt. */
 export interface Assignment {
   id: string
   courseId: string
   title: string
   description: string
   dueDate: string
+  dueAt?: string
+  maxAttempts?: number
+  createdBy?: string
 }
 
-// Temporary data for Sprint 1 development.
-// Replace with the team's shared persistence layer during integration.
-const sampleAssignments: Assignment[] = [
-  {
-    id: 'assignment-001',
-    courseId: 'CSCN73030',
-    title: 'Design Sprint 1',
-    description: 'Complete the first design sprint.',
-    dueDate: '2026-10-20T23:59:00-04:00',
-  },
-  {
-    id: 'assignment-002',
-    courseId: 'CSCN73030',
-    title: 'Design Sprint 2',
-    description: 'Complete the second design sprint.',
-    dueDate: '2026-11-03T23:59:00-05:00',
-  },
-  {
-    id: 'assignment-003',
-    courseId: 'CSCN73010',
-    title: 'Software Quality Report',
-    description: 'Submit the quality report.',
-    dueDate: '2026-10-25T23:59:00-04:00',
-  },
-]
+export function toAssignment(record: AssignmentRecord): Assignment {
+  return {
+    ...record,
+    // The existing due-date helpers and tests use dueDate. Do not persist a second deadline.
+    dueDate: record.dueAt,
+  }
+}
 
 export function listAssignmentsByCourse(
   courseId: string,
-  assignments: readonly Assignment[] = sampleAssignments,
+  assignments?: readonly Assignment[],
 ): Assignment[] {
   if (!courseId.trim()) return []
-
-  return assignments.filter(
-    (assignment) => assignment.courseId === courseId,
-  )
+  if (assignments) return assignments.filter((item) => item.courseId === courseId)
+  return listAssignments(db, courseId).map(toAssignment)
 }
 
 export function getAssignmentById(
   id: string,
-  assignments: readonly Assignment[] = sampleAssignments,
+  assignments?: readonly Assignment[],
 ): Assignment | undefined {
-  return assignments.find((assignment) => assignment.id === id)
+  if (assignments) return assignments.find((item) => item.id === id)
+  const record = getAssignment(db, id)
+  return record ? toAssignment(record) : undefined
 }
 
+/** Legacy createAssignment helper; the actual DB contract uses dueAt. */
+export function addAssignment(assignment: Assignment, database: Database = db): void {
+  saveAssignment(database, {
+    id: assignment.id,
+    courseId: assignment.courseId,
+    title: assignment.title,
+    description: assignment.description,
+    dueAt: assignment.dueAt ?? assignment.dueDate,
+    maxAttempts: assignment.maxAttempts ?? 3,
+    createdBy: assignment.createdBy ?? 'demo-instructor',
+  })
+}
 
- // M04-FR-001: Add a newly created assignment to temporary storage.
-export function addAssignment(assignment: Assignment): void {
-  sampleAssignments.push(assignment)
+export function updateAssignmentDueDate(id: string, dueAt: string, database: Database = db): Assignment | undefined {
+  const record = getAssignment(database, id)
+  if (!record) return undefined
+  saveAssignment(database, { ...record, dueAt })
+  return toAssignment({ ...record, dueAt })
 }
