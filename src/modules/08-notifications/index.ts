@@ -1,38 +1,65 @@
-// MODULE 8: Notifications & Messaging
-//
-// Scope from the project brief:
-//   - Course announcements
-//   - In-app notifications
-//   - Direct messaging
-//   - Assignment reminders
-//   - Quiz reminders
-//   - Notification preferences
-//
-// HOW TO ADD A PAGE TO THE ROUTER (basic demo):
-//   1. Find the router at the bottom of this file.
-//   2. Copy the  .get('/hello', ...)  line.
-//   3. Change the address ('/hello') and the HTML it returns.
-//   4. Save. Your new page is at  http://localhost:3000/08-notifications/<your-address>
 import { Elysia } from 'elysia'
 import { defineModule, moduleBase } from '../../core/defineModule'
+import { messageRoutes } from './messages/routes'
+import { notificationRoutes } from './notifications/routes'
+import { page } from './views'
 
 const base = moduleBase(import.meta.dir)
 
 export default defineModule({
   name: 'Module 8: Notifications & Messaging',
-  description: 'Announcements, notifications, messages',
+  description: 'Announcements, notifications, direct messages',
 
   router: new Elysia()
-    // Front page of this module. The button on the home page opens it.
+    .get('/', () =>
+      page(
+        'Notifications & Messaging',
+        `<style>
+          .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+          .btns a { padding: 8px 14px; border: 1px solid #888; border-radius: 4px;
+                    text-decoration: none; color: inherit; }
+          .btns a:hover { background: #eee; }
+        </style>
+        <h1>Notifications & Messaging</h1>
+
+        <h2>Pages</h2>
+        <div class="btns">
+          <a href="${base}/inbox">Notification inbox</a>
+          <a href="${base}/preferences">Notification preferences</a>
+          <a href="${base}/messages">Messages</a>
+        </div>
+
+        <h2>API (GET, opens JSON)</h2>
+        <div class="btns">
+          <a href="${base}/api/users/me/notificationPreferences">My notification preferences</a>
+          <a href="${base}/api/courses/course-101/announcements">Announcements for course-101</a>
+        </div>
+
+        <h2>API docs (test POST / PATCH here)</h2>
+        <div class="btns">
+          <a href="${base}/docs">Swagger docs</a>
+          <a href="${base}/openapi.yaml">openapi.yaml</a>
+        </div>`,
+      ),
+    )
+    // The API spec file
     .get(
-      '/',
+      '/openapi.yaml',
+      () =>
+        new Response(Bun.file(`${import.meta.dir}/openapi.yaml`), {
+          headers: { 'Content-Type': 'application/yaml' },
+        }),
+    )
+    // Interactive API docs
+    .get(
+      '/docs',
       () => `
-        <h1>Module 8: Notifications &amp; Messaging</h1>
-        <p>It works! Replace this page with your own.</p>
-        <p><a href="${base}/hello">Demo page</a></p>
-        <p><a href="/">Back to the home page</a></p>
+        <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+        <div id="swagger"></div>
+        <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+        <script>SwaggerUIBundle({ url: '${base}/openapi.yaml', dom_id: '#swagger' })</script>
       `,
     )
-    // DEMO: this one line is all it takes to add a page.
-    .get('/hello', () => `<h1>Hello from Module 8</h1><a href="${base}">Back</a>`),
+    .use(notificationRoutes)
+    .use(messageRoutes),
 })
