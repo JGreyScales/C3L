@@ -12,6 +12,7 @@ import {
   type SubmissionRecord,
 } from './db/repository'
 import { DEFAULT_UPLOADS_DIR, saveUploadedFile } from './db/uploads'
+import { effectiveDueDate, submissionStatus } from './lateness'
 
 export const MAX_FILE_BYTES = 5 * 1024 * 1024
 const allowedExtensions = /\.(pdf|txt)$/i
@@ -61,7 +62,7 @@ export function createSubmissionStore(
             }
           }
           const accommodation = getAccommodation(database, assignmentId, studentId)
-          const effectiveDueAt = accommodation?.extendedDueAt ?? assignment.dueAt
+          const effectiveDueAt = effectiveDueDate(assignment, accommodation)
           const submittedAt = new Date().toISOString()
           const row: SubmissionRecord = {
             id: randomUUID(),
@@ -75,7 +76,7 @@ export function createSubmissionStore(
             filePath,
             submittedAt,
             effectiveDueAt,
-            status: Date.parse(submittedAt) <= Date.parse(effectiveDueAt) ? 'on-time' : 'late',
+            status: submissionStatus(submittedAt, effectiveDueAt),
           }
           saveSubmission(database, row)
           return { ok: true, submission: row }

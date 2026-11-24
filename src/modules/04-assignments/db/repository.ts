@@ -173,3 +173,25 @@ export function getAccommodation(
     .get(assignmentId, studentId) as AccommodationRecord | null
   return row ?? undefined
 }
+
+/** Every accommodation granted on one assignment, for the instructor's management list. */
+export function listAccommodations(
+  database: Database,
+  assignmentId: string,
+): AccommodationRecord[] {
+  return database
+    .query('SELECT * FROM accommodations WHERE assignmentId = ? ORDER BY studentId ASC')
+    .all(assignmentId) as AccommodationRecord[]
+}
+
+/** Removes one student's accommodation. Returns true when a row was deleted. */
+export function deleteAccommodation(
+  database: Database,
+  assignmentId: string,
+  studentId: string,
+): boolean {
+  const result = database
+    .query('DELETE FROM accommodations WHERE assignmentId = ? AND studentId = ?')
+    .run(assignmentId, studentId)
+  return result.changes > 0
+}
