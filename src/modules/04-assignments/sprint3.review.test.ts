@@ -44,7 +44,7 @@ describe('Sprint 3 pull-request review regressions', () => {
       id: '1',
       code: 'PROG2020',
       enrollments: ['student'],
-      instructorId: 'inst-1',
+      instructorId: teacher.id, // #12: must be this course's own instructor
       archived: false,
     }
     saveAssignment(database, record('assignment-1', '2030-01-01T17:00:00Z'))
@@ -125,7 +125,7 @@ describe('Sprint 3 pull-request review regressions', () => {
       id: '1',
       code: 'PROG2020',
       enrollments: ['student'],
-      instructorId: 'inst-1',
+      instructorId: teacher.id, // #12: must be this course's own instructor
       archived: false,
     }
     saveAssignment(database, record('archived-work', '2030-01-01T17:00:00Z'))

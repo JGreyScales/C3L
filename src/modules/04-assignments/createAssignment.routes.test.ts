@@ -10,7 +10,7 @@ const course: CourseInfo = {
   code: 'CSCN73030',
   enrollments: [],
   archived: false,
-  instructorId: 'demo-id',
+  instructorId: instructor.id, // #12: must be this course's own instructor
 }
 const router = createAssignmentsRouter({
   database,
