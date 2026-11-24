@@ -20,8 +20,10 @@ import {
 import { assignmentPage } from './layout'
 import { db } from './db/database'
 import {
+  deleteAccommodation,
   getAssignment,
   getAccommodation,
+  listAccommodations,
   listAssignments,
   saveAccommodation,
   type AssignmentRecord,
@@ -30,6 +32,7 @@ import {
 import { DEFAULT_UPLOADS_DIR } from './db/uploads'
 import { updateAssignmentDueDate } from './assignments'
 import { createSubmissionStore, MAX_FILE_BYTES } from './submissions'
+import { effectiveDueDate } from './lateness'
 import {
   canManage,
   canSubmit,
@@ -167,13 +170,22 @@ export function createAssignmentsRouter(options: RouterOptions = {}) {
     )
   }
 
-  function renderSubmissionForm(item: AssignmentRecord, error?: string): string {
+  function renderSubmissionForm(
+    item: AssignmentRecord,
+    effectiveDueAt: string = item.dueAt,
+    error?: string,
+  ): string {
+    const extended = effectiveDueAt !== item.dueAt
+    // The student sees their own effective deadline; the accommodation reason stays instructor-only.
+    const deadlineFacts = extended
+      ? `Your due date: <strong>${escapeHtml(formatDueDate(effectiveDueAt))}</strong><br>
+      <span>Class due date: ${escapeHtml(formatDueDate(item.dueAt))} — you have an approved extension.</span><br>`
+      : `Due: ${escapeHtml(formatDueDate(item.dueAt))}<br>`
     return assignmentPage(
       'Submit assignment',
       `
       <h1>Submit assignment file</h1>
-      <div class="facts"><strong>${escapeHtml(item.title)}</strong><br>Due: ${escapeHtml(formatDueDate(item.dueAt))}<br>
-      Maximum attempts: ${item.maxAttempts}</div>
+      <div class="facts"><strong>${escapeHtml(item.title)}</strong><br>${deadlineFacts}Maximum attempts: ${item.maxAttempts}</div>
       <p>PDF or TXT, up to 5 MB. Your files and receipts remain saved after restarting the server.</p>
       ${error ? `<p role="alert">${escapeHtml(error)}</p>` : ''}
       <form method="post" enctype="multipart/form-data" action="${submissionPath(item.id)}">
@@ -224,6 +236,36 @@ export function createAssignmentsRouter(options: RouterOptions = {}) {
           : '<p>No submissions yet.</p>'
       }
       <p><a href="${submissionPath(item.id)}">Submit a new attempt</a></p>
+      <p><a href="${detailsPath(item.id)}">Back to assignment</a></p>`,
+    )
+  }
+
+  function renderAccommodationsPage(item: AssignmentRecord): string {
+    const rows = listAccommodations(database, item.id)
+    const list = rows.length
+      ? `<h2>Current accommodations</h2>
+      <ul class="assignment-list">${rows
+        .map(
+          (row) => `<li>
+        <span><strong>Student ${escapeHtml(row.studentId)}</strong> — extended to ${escapeHtml(formatDueDate(row.extendedDueAt))}</span>
+        <span>Reason: ${escapeHtml(row.reason)}</span>
+        <form method="post" action="${detailsPath(item.id)}/accommodations/remove">
+        <input type="hidden" name="studentId" value="${escapeHtml(row.studentId)}">
+        <button type="submit">Remove</button></form></li>`,
+        )
+        .join('')}</ul>`
+      : '<p>No accommodations granted yet.</p>'
+    return assignmentPage(
+      'Grant accommodation',
+      `
+      <h1>Deadline accommodations</h1><p>${escapeHtml(item.title)}</p>
+      <h2>Grant or change an accommodation</h2>
+      <form method="post" action="${detailsPath(item.id)}/accommodations">
+      <label for="studentId">Enrolled student's ID</label><input id="studentId" name="studentId" required>
+      <label for="extendedDueAt">Extended due date (Toronto time)</label><input type="datetime-local" id="extendedDueAt" name="extendedDueAt" required>
+      <label for="reason">Reason (only instructors see this)</label><textarea id="reason" name="reason" maxlength="500" required></textarea>
+      <button type="submit">Grant extension</button></form>
+      ${list}
       <p><a href="${detailsPath(item.id)}">Back to assignment</a></p>`,
     )
   }
@@ -363,16 +405,7 @@ export function createAssignmentsRouter(options: RouterOptions = {}) {
         if ('error' in checked) return checked.error
         if (!checked.actor || !checked.course || !canManage(checked.actor, checked.course))
           return forbidden()
-        return assignmentPage(
-          'Grant accommodation',
-          `
-        <h1>Grant deadline accommodation</h1><p>${escapeHtml(item.title)}</p>
-        <form method="post" action="${detailsPath(item.id)}/accommodations">
-        <label for="studentId">Enrolled student's ID</label><input id="studentId" name="studentId" required>
-        <label for="extendedDueAt">Extended due date (Toronto time)</label><input type="datetime-local" id="extendedDueAt" name="extendedDueAt" required>
-        <label for="reason">Reason</label><textarea id="reason" name="reason" maxlength="500" required></textarea>
-        <button type="submit">Grant extension</button></form>`,
-        )
+        return renderAccommodationsPage(item)
       })
       .post(
         '/assignments/:id/accommodations',
@@ -412,6 +445,28 @@ export function createAssignmentsRouter(options: RouterOptions = {}) {
           body: t.Object({ studentId: t.String(), extendedDueAt: t.String(), reason: t.String() }),
         },
       )
+      .post(
+        '/assignments/:id/accommodations/remove',
+        async ({ params, body, request }) => {
+          const item = assignment(params.id)
+          if (!item) return missing('Assignment')
+          const checked = await gate(request, item.courseId)
+          if ('error' in checked) return checked.error
+          if (!checked.actor || !checked.course || !canManage(checked.actor, checked.course))
+            return forbidden()
+          const removed = body.studentId
+            ? deleteAccommodation(database, item.id, body.studentId)
+            : false
+          return assignmentPage(
+            removed ? 'Accommodation removed' : 'No accommodation removed',
+            `<h1>${removed ? 'Accommodation removed' : 'No accommodation to remove'}</h1>
+        ${removed ? `<p>Student ${escapeHtml(body.studentId)} is back to the class deadline.</p>` : ''}
+        <p><a href="${detailsPath(item.id)}/accommodations">Back to accommodations</a></p>
+        <p><a href="${detailsPath(item.id)}">Back to assignment</a></p>`,
+          )
+        },
+        { body: t.Object({ studentId: t.String() }) },
+      )
 
       // Sprint 2 + Sprint 3 submission routes. Static /history precedes /:receipt.
       .get('/assignments/:id/submissions', async ({ params, request }) => {
@@ -421,7 +476,8 @@ export function createAssignmentsRouter(options: RouterOptions = {}) {
         if ('error' in checked) return checked.error
         if (!checked.actor || !checked.course || !canSubmit(checked.actor, checked.course))
           return forbidden('Only an enrolled student can submit.')
-        return renderSubmissionForm(item)
+        const accommodation = getAccommodation(database, item.id, checked.actor.id)
+        return renderSubmissionForm(item, effectiveDueDate(item, accommodation))
       })
       .post(
         '/assignments/:id/submissions',
@@ -432,8 +488,12 @@ export function createAssignmentsRouter(options: RouterOptions = {}) {
           if ('error' in checked) return checked.error
           if (!checked.actor || !checked.course || !canSubmit(checked.actor, checked.course))
             return forbidden('Only an enrolled student can submit.')
+          const studentDueAt = effectiveDueDate(
+            item,
+            getAccommodation(database, item.id, checked.actor.id),
+          )
           const invalidUpload = (status: number, error: string) =>
-            html(status, renderSubmissionForm(item, error))
+            html(status, renderSubmissionForm(item, studentDueAt, error))
           if (Number(request.headers.get('content-length')) > MAX_FILE_BYTES + 64 * 1024) {
             return invalidUpload(413, 'Files must be 5 MB or smaller.')
           }
