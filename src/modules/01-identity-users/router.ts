@@ -4,6 +4,11 @@
 //   /api/me         who is calling, and edit my own profile
 //   /api/users/...  admin tools: list users, change a role, activate / deactivate an account
 //   /               the front page that lists all of this (pages.ts)
+//   /register       sign-up form (authPages.ts)
+//   /login          sign-in form (authPages.ts)
+//   /forgot-password  ask for a reset token (authPages.ts)
+//   /reset-password   use the token to set a new password (authPages.ts)
+//   /profile        the signed-in user's own profile page (authPages.ts)
 //   /docs           Swagger UI, and /openapi.json is what it shows (endpoints.ts, openapi.ts)
 //
 // The login cookie lasts 7 days and cannot be "taken back" by the server. So the /api routes
@@ -12,6 +17,13 @@
 // deactivation works immediately.
 import { Elysia } from 'elysia'
 import { type Auth, type AuthOptions, createAuth } from './auth'
+import {
+  renderForgotPasswordPage,
+  renderLoginPage,
+  renderProfilePage,
+  renderRegisterPage,
+  renderResetPasswordPage,
+} from './authPages'
 import { buildOpenApi } from './openapi'
 import { renderDocsPage, renderFrontPage } from './pages'
 import { isRole, ROLES, type Role } from './roles'
@@ -106,6 +118,14 @@ export function createRouter(options: AuthOptions) {
     new Elysia()
       // Front page of this module. The button on the home page opens it.
       .get('/', () => renderFrontPage(options.mountPath))
+
+      // The pages people actually use. They call the /api routes below with fetch(), the same
+      // way another module would (see "Using it from another module" on the front page).
+      .get('/register', () => renderRegisterPage(options.mountPath))
+      .get('/login', () => renderLoginPage(options.mountPath))
+      .get('/forgot-password', () => renderForgotPasswordPage(options.mountPath))
+      .get('/reset-password', () => renderResetPasswordPage(options.mountPath))
+      .get('/profile', () => renderProfilePage(options.mountPath))
 
       // Swagger UI, and the description of the endpoints it shows (made from endpoints.ts).
       .get('/docs', () => renderDocsPage(options.mountPath))
