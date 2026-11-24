@@ -141,6 +141,16 @@ export function listAttempts(
     .all(assignmentId, studentId) as SubmissionRecord[]
 }
 
+/** Every attempt by every student on one assignment (instructor overview, gradebook API). */
+export function listSubmissionsForAssignment(
+  database: Database,
+  assignmentId: string,
+): SubmissionRecord[] {
+  return database
+    .query('SELECT * FROM submissions WHERE assignmentId = ? ORDER BY studentId, attemptNumber')
+    .all(assignmentId) as SubmissionRecord[]
+}
+
 export function saveAccommodation(database: Database, accommodation: AccommodationRecord): void {
   database
     .query(`
