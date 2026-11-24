@@ -1,8 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import {
-  listAssignmentsByCourse,
-  type Assignment,
-} from './assignments'
+import { listAssignmentsByCourse, type Assignment } from './assignments'
 
 const assignments: Assignment[] = [
   {
@@ -33,10 +30,7 @@ describe('M04-FR-003: View assignments', () => {
     const result = listAssignmentsByCourse('CSCN73030', assignments)
 
     expect(result).toHaveLength(2)
-    expect(result.map((item) => item.title)).toEqual([
-      'Assignment A',
-      'Assignment B',
-    ])
+    expect(result.map((item) => item.title)).toEqual(['Assignment A', 'Assignment B'])
   })
 
   test('does not return assignments from another course', () => {

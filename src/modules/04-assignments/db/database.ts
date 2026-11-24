@@ -17,7 +17,5 @@ export function createDatabase(path: string = DEFAULT_PATH): Database {
 
 /** Tests never touch local demo data. Production uses one shared connection. */
 export const db = createDatabase(
-  process.env.NODE_ENV === 'test'
-    ? ':memory:'
-    : (process.env.M04_DB_PATH ?? DEFAULT_PATH),
+  process.env.NODE_ENV === 'test' ? ':memory:' : (process.env.M04_DB_PATH ?? DEFAULT_PATH),
 )

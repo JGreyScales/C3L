@@ -1,6 +1,11 @@
 import type { Database } from 'bun:sqlite'
 import { db } from './db/database'
-import { getAssignment, listAssignments, saveAssignment, type AssignmentRecord } from './db/repository'
+import {
+  getAssignment,
+  listAssignments,
+  saveAssignment,
+  type AssignmentRecord,
+} from './db/repository'
 
 /** Legacy Sprint 1 presentation model. The single persisted deadline is dueAt. */
 export interface Assignment {
@@ -53,7 +58,11 @@ export function addAssignment(assignment: Assignment, database: Database = db): 
   })
 }
 
-export function updateAssignmentDueDate(id: string, dueAt: string, database: Database = db): Assignment | undefined {
+export function updateAssignmentDueDate(
+  id: string,
+  dueAt: string,
+  database: Database = db,
+): Assignment | undefined {
   const record = getAssignment(database, id)
   if (!record) return undefined
   saveAssignment(database, { ...record, dueAt })

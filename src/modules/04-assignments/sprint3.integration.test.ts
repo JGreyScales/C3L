@@ -10,15 +10,32 @@ const origin = 'http://localhost'
 const teacher: Actor = { id: 'teacher-1', role: 'instructor', name: 'Teacher' }
 const student: Actor = { id: 'student-1', role: 'student', name: 'Student' }
 const outsider: Actor = { id: 'outsider', role: 'student', name: 'Other student' }
-const course: CourseInfo = { id: '1', code: 'PROG2020', archived: false, instructorId: 'inst-1', enrollments: ['student-1', 'outsider'] }
-
-function postForm(router: ReturnType<typeof createAssignmentsRouter>, path: string, values: Record<string, string>) {
-  return router.handle(new Request(origin + path, {
-    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams(values).toString(),
-  }))
+const course: CourseInfo = {
+  id: '1',
+  code: 'PROG2020',
+  archived: false,
+  instructorId: 'inst-1',
+  enrollments: ['student-1', 'outsider'],
 }
-function upload(router: ReturnType<typeof createAssignmentsRouter>, path: string, fileName: string) {
+
+function postForm(
+  router: ReturnType<typeof createAssignmentsRouter>,
+  path: string,
+  values: Record<string, string>,
+) {
+  return router.handle(
+    new Request(origin + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(values).toString(),
+    }),
+  )
+}
+function upload(
+  router: ReturnType<typeof createAssignmentsRouter>,
+  path: string,
+  fileName: string,
+) {
   const body = new FormData()
   body.set('file', new File([`original bytes for ${fileName}`], fileName, { type: 'text/plain' }))
   return router.handle(new Request(origin + path, { method: 'POST', body }))
@@ -32,13 +49,17 @@ describe('Sprint 3 end-to-end user journey', () => {
     const options = {
       uploadDirectory: join(folder, 'uploads'),
       getActor: async () => actor,
-      getCourse: async (id: string) => id === '1' ? course : null,
+      getCourse: async (id: string) => (id === '1' ? course : null),
     }
     let database = createDatabase(path)
     try {
       let router = createAssignmentsRouter({ ...options, database })
       const created = await postForm(router, '/assignments/new', {
-        courseId: '1', title: 'Restart demo', description: 'Two attempts', dueDate: '2030-11-23T17:00', maxAttempts: '3',
+        courseId: '1',
+        title: 'Restart demo',
+        description: 'Two attempts',
+        dueDate: '2030-11-23T17:00',
+        maxAttempts: '3',
       })
       expect(created.status).toBe(201)
       const id = (await created.text()).match(/assignments\/([0-9a-f-]{36})/)?.[1]
@@ -78,7 +99,9 @@ describe('Sprint 3 end-to-end user journey', () => {
       router = createAssignmentsRouter({ ...options, database })
       // Module 2 currently loses enrollments after restart. Saved work remains visible to its owner.
       course.enrollments = []
-      const afterRestart = await router.handle(new Request(`${origin}${prefix}/submissions/history`))
+      const afterRestart = await router.handle(
+        new Request(`${origin}${prefix}/submissions/history`),
+      )
       const restored = await afterRestart.text()
       expect(afterRestart.status).toBe(200)
       expect(restored).toContain('first.txt')
@@ -95,12 +118,16 @@ describe('Sprint 3 end-to-end user journey', () => {
       course.enrollments = ['student-1', 'outsider']
       actor = teacher
       const extension = await postForm(router, `${prefix}/accommodations`, {
-        studentId: 'student-1', extendedDueAt: '2030-11-24T17:00', reason: 'Approved extension',
+        studentId: 'student-1',
+        extendedDueAt: '2030-11-24T17:00',
+        reason: 'Approved extension',
       })
       expect(extension.status).toBe(200)
       actor = student
       expect((await upload(router, `${prefix}/submissions`, 'third.txt')).status).toBe(303)
-      const updated = await (await router.handle(new Request(`${origin}${prefix}/submissions/history`))).text()
+      const updated = await (
+        await router.handle(new Request(`${origin}${prefix}/submissions/history`))
+      ).text()
       expect(updated).toContain('Attempt 3')
       expect((updated.match(/on-time/g) ?? []).length).toBeGreaterThanOrEqual(2)
       const limited = await upload(router, `${prefix}/submissions`, 'fourth.txt')
@@ -118,9 +145,14 @@ describe('Sprint 3 end-to-end user journey', () => {
       const router = createAssignmentsRouter({
         database,
         getActor: async () => actor,
-        getCourse: async id => id === '1' ? { ...course, enrollments: ['student-1'] } : null,
+        getCourse: async (id) => (id === '1' ? { ...course, enrollments: ['student-1'] } : null),
       })
-      const form = { courseId: '1', title: 'Protected', description: 'Demo', dueDate: '2030-11-23T17:00' }
+      const form = {
+        courseId: '1',
+        title: 'Protected',
+        description: 'Demo',
+        dueDate: '2030-11-23T17:00',
+      }
       expect((await postForm(router, '/assignments/new', form)).status).toBe(401)
       actor = student
       expect((await postForm(router, '/assignments/new', form)).status).toBe(403)

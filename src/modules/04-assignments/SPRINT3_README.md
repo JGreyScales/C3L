@@ -4,14 +4,13 @@
 
 Everything in this patch lives in `src/modules/04-assignments/`. It replaces the Sprint 1–2 temporary assignment array and upload Map with persistent SQLite rows and files on disk. The **database contract** uses the agreed field names exactly: `dueAt`, `maxAttempts`, `createdBy`, and the complete Submission and Accommodation records. The legacy Sprint 1 form still calls its HTML field `dueDate`; that value is converted to the one persisted `dueAt` column. There is no duplicate deadline column.
 
-## Apply in the correct order
+## Current integration status
 
-1. Have a teammate review and merge fork PR #14. Cheryl's branch `feature/m04-sprint-2-testing` is based on PR #14; create its separate PR into the fork **after** #14 merges, and merge it after review.
-2. On a clean local checkout of `Ameer-sys/C3L`, add `upstream` if absent, then merge `upstream/main` into the fork's `main`. Do not force push or rebase. Install with `bun install` and run `bun run check`. Work on a feature branch, never commit directly to `main`.
-3. Overlay this patch on `feature/m04-sprint-3-storage`. It changes only Module 4 files. Keep existing `dueDate.ts`, `layout.ts`, and the other previous tests in that folder.
-4. Run `bun test src/modules/04-assignments/`, then `bun run check`. If you need to autoformat, target only Module 4 (`bunx biome check --write src/modules/04-assignments`), not the entire repository.
-5. Open a draft PR from your **fork** branch into `Ameer-sys/C3L:main`. Let Lanna/Cheryl review the schema and APIs immediately. After review and checks, merge into fork main.
-6. Once integration is stable, open a fork `main` -> class `main` PR for Sprints 1–2, then a separate upstream PR when Sprint 3 is complete. Do not push to class `main` directly.
+- Sprint 2 PRs #14 and #15 have been merged into the team fork's `main`.
+- Sprint 3 persistence and upload implementation is on `feature/m04-sprint-3-storage` in team PR #16.
+- PR #17 (submission history enhancements) is based on the Sprint 3 storage branch. Merge PR #16 first; then retarget and review #17 separately before merging it to `main`.
+- The team must review/merge within the fork before submitting changes to the upstream class repository. Do not modify other teams' module directories.
+- Verify `bun test src/modules/04-assignments/`, `bun run check` and the live browser workflow before merging. Run `bunx biome check --write src/modules/04-assignments` for formatting within this module only.
 
 ## Developer commands
 
@@ -53,10 +52,3 @@ Students cannot specify their `studentId` on upload: the current user is read fr
 5. Sign in as instructor; change the assignment deadline to a time in the past. Sign back in as student and upload `final.txt`. History shows **Attempt 1 — on-time** and **Attempt 2 — late**. The first result stays on-time because deadlines/statuses are snapshots per submission.
 6. Stop and restart `bun run dev` (do not delete `data/`). Open Module 4 history and both downloads as the student. Both attempts and bytes remain saved.
 7. Optional: Grant that student an accommodation with a future deadline, submit a third attempt (on-time), and verify the fourth is rejected (409) because `maxAttempts=3`.
-
-## Known integration blockers (outside Module 4 ownership)
-
-- Module 2's seeded instructor picker uses static `inst-1` IDs, not real Module 1 user IDs. Module 4 currently authorizes based on the current user's **instructor/admin role** rather than comparing `course.instructorId` with `actor.id`. Ask Module 2 to expose real instructor IDs for strict course-owner authorization.
-- Module 2's course and enrollment arrays reset after a server restart. The original student may still view and download **their own prior attempts** after restart (because ownership is persisted), but re-enrollment in Module 2 is required before uploading another attempt. Coordinate durable enrollment separately with Module 2. Do not edit their module without team/admin approval.
-- This patch cannot authenticate live accounts without a synchronized upstream that includes Module 1 and Better Auth (`bun install`).
-- The storage patch must be merged via GitHub after a teammate review and actual Bun CI. At the time of package creation, GitHub remote writes are blocked for this assistant (HTTP 403) and Bun is not installed in this assistant's execution runtime.

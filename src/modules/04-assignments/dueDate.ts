@@ -27,7 +27,8 @@ export const DUE_DATE_ERRORS = {
 
 // "2026-10-23T23:59" (from <input type="datetime-local">), optionally with seconds,
 // optionally with "Z" or an offset like "-04:00".
-const DUE_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(Z|[+-]\d{2}:\d{2})?$/
+const DUE_DATE_PATTERN =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(Z|[+-]\d{2}:\d{2})?$/
 
 const MINUTE = 60_000
 
@@ -130,7 +131,13 @@ export function parseDueDateInput(input: unknown, timeZone = SCHOOL_TIME_ZONE): 
     .map((offset) => wallClock - offset * MINUTE)
     .filter((utc) => {
       const p = wallClockParts(utc, timeZone)
-      return p.year === year && p.month === month && p.day === day && p.hour === hour && p.minute === minute
+      return (
+        p.year === year &&
+        p.month === month &&
+        p.day === day &&
+        p.hour === hour &&
+        p.minute === minute
+      )
     })
     .sort((a, b) => a - b)
 

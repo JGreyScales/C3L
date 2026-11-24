@@ -18,9 +18,7 @@ describe('M04-FR-002: Validate assignment fields', () => {
 
     if (result.ok) {
       expect(result.values.title).toBe('Assignment 1')
-      expect(result.values.dueDate).toBe(
-        '2026-10-23T23:59:00-04:00',
-      )
+      expect(result.values.dueDate).toBe('2026-10-23T23:59:00-04:00')
     }
   })
 
@@ -55,9 +53,7 @@ describe('M04-FR-002: Validate assignment fields', () => {
     expect(result.ok).toBe(false)
 
     if (!result.ok) {
-      expect(result.errors.title).toBe(
-        'Title must be 200 characters or fewer.',
-      )
+      expect(result.errors.title).toBe('Title must be 200 characters or fewer.')
     }
   })
 
@@ -70,9 +66,7 @@ describe('M04-FR-002: Validate assignment fields', () => {
     expect(result.ok).toBe(false)
 
     if (!result.ok) {
-      expect(result.errors.description).toBe(
-        'Description is required.',
-      )
+      expect(result.errors.description).toBe('Description is required.')
     }
   })
 
@@ -85,9 +79,7 @@ describe('M04-FR-002: Validate assignment fields', () => {
     expect(result.ok).toBe(false)
 
     if (!result.ok) {
-      expect(result.errors.courseId).toBe(
-        'Course ID is required.',
-      )
+      expect(result.errors.courseId).toBe('Course ID is required.')
     }
   })
 
@@ -100,9 +92,7 @@ describe('M04-FR-002: Validate assignment fields', () => {
     expect(result.ok).toBe(false)
 
     if (!result.ok) {
-      expect(result.errors.dueDate).toBe(
-        DUE_DATE_ERRORS.missing,
-      )
+      expect(result.errors.dueDate).toBe(DUE_DATE_ERRORS.missing)
     }
   })
 
@@ -115,9 +105,7 @@ describe('M04-FR-002: Validate assignment fields', () => {
     expect(result.ok).toBe(false)
 
     if (!result.ok) {
-      expect(result.errors.dueDate).toBe(
-        DUE_DATE_ERRORS.calendar,
-      )
+      expect(result.errors.dueDate).toBe(DUE_DATE_ERRORS.calendar)
     }
   })
 
@@ -132,9 +120,7 @@ describe('M04-FR-002: Validate assignment fields', () => {
 
     if (result.ok) {
       expect(result.values.title).toBe('Assignment 1')
-      expect(result.values.description).toBe(
-        'Complete the assignment.',
-      )
+      expect(result.values.description).toBe('Complete the assignment.')
     }
   })
 
@@ -154,7 +140,6 @@ describe('M04-FR-002: Validate assignment fields', () => {
   })
 })
 
-
 describe('M04-FR-001: Create assignment', () => {
   test('creates a valid assignment with a unique identifier', () => {
     const result = createAssignment(validInput)
@@ -165,9 +150,7 @@ describe('M04-FR-001: Create assignment', () => {
       expect(result.assignment.id).toBeTruthy()
       expect(result.assignment.title).toBe('Assignment 1')
       expect(result.assignment.courseId).toBe('CSCN73030')
-      expect(result.assignment.dueDate).toBe(
-        '2026-10-23T23:59:00-04:00',
-      )
+      expect(result.assignment.dueDate).toBe('2026-10-23T23:59:00-04:00')
     }
   })
 
@@ -204,11 +187,7 @@ describe('M04-FR-001: Create assignment', () => {
     if (result.ok) {
       const assignments = listAssignmentsByCourse('CSCN73030')
 
-      expect(
-        assignments.some(
-          (assignment) => assignment.id === result.assignment.id,
-        ),
-      ).toBe(true)
+      expect(assignments.some((assignment) => assignment.id === result.assignment.id)).toBe(true)
     }
   })
 

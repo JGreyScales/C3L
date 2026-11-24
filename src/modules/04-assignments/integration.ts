@@ -49,3 +49,8 @@ export function canManage(actor: Actor, course: CourseInfo): boolean {
   // Role-based management works now; ownership checks need a real Module 2 identity contract.
   return !course.archived && (actor.role === 'instructor' || actor.role === 'admin')
 }
+
+/** Instructors and admins may inspect saved work, including for archived courses. */
+export function canViewHistory(actor: Actor): boolean {
+  return actor.role === 'instructor' || actor.role === 'admin'
+}

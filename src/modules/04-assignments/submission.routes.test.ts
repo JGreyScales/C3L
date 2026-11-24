@@ -9,14 +9,34 @@ import type { Actor, CourseInfo } from './integration'
 
 const database = createDatabase(':memory:')
 const dir = mkdtempSync(join(tmpdir(), 'm04-route-tests-'))
-afterAll(() => { database.close(); rmSync(dir, { recursive: true, force: true }) })
-for (const id of ['assignment-001', 'assignment-002']) saveAssignment(database, {
-  id, courseId: '1', title: `Assignment ${id}`, description: 'Demo',
-  dueAt: '2030-11-23T17:00:00Z', maxAttempts: 3, createdBy: 'teacher',
+afterAll(() => {
+  database.close()
+  rmSync(dir, { recursive: true, force: true })
 })
+for (const id of ['assignment-001', 'assignment-002'])
+  saveAssignment(database, {
+    id,
+    courseId: '1',
+    title: `Assignment ${id}`,
+    description: 'Demo',
+    dueAt: '2030-11-23T17:00:00Z',
+    maxAttempts: 3,
+    createdBy: 'teacher',
+  })
 const actor: Actor = { id: 'student-1', role: 'student', name: 'Student' }
-const course: CourseInfo = { id: '1', code: 'DEMO', enrollments: [actor.id], instructorId: null, archived: false }
-const router = createAssignmentsRouter({ database, uploadDirectory: dir, getActor: async () => actor, getCourse: async id => id === '1' ? course : null })
+const course: CourseInfo = {
+  id: '1',
+  code: 'DEMO',
+  enrollments: [actor.id],
+  instructorId: null,
+  archived: false,
+}
+const router = createAssignmentsRouter({
+  database,
+  uploadDirectory: dir,
+  getActor: async () => actor,
+  getCourse: async (id) => (id === '1' ? course : null),
+})
 const origin = 'http://localhost'
 const details = '/assignments/assignment-001'
 const submissions = `${details}/submissions`
@@ -46,16 +66,23 @@ describe('Module 4 submission workflow', () => {
     const download = await router.handle(new Request(`${origin}${relative}/file`))
     expect(download.headers.get('content-disposition')).toContain('filename="hello.txt"')
     expect(await download.text()).toBe('working demo')
-    expect((await router.handle(new Request(origin + relative.replace('assignment-001', 'assignment-002')))).status).toBe(404)
+    expect(
+      (
+        await router.handle(
+          new Request(origin + relative.replace('assignment-001', 'assignment-002')),
+        )
+      ).status,
+    ).toBe(404)
   })
   test('invalid upload creates no receipt', async () => {
     const file = new File(['demo'], 'demo.txt')
     const responses = await Promise.all([
-      upload(submissions), upload(submissions, file, file),
+      upload(submissions),
+      upload(submissions, file, file),
       upload(submissions, new File(['demo'], 'demo.exe')),
       upload('/assignments/missing/submissions', file),
     ])
-    expect(responses.map(r => r.status)).toEqual([400, 400, 415, 404])
-    expect(responses.every(r => !r.headers.has('location'))).toBe(true)
+    expect(responses.map((r) => r.status)).toEqual([400, 400, 415, 404])
+    expect(responses.every((r) => !r.headers.has('location'))).toBe(true)
   })
 })

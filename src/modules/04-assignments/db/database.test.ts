@@ -61,8 +61,10 @@ describe('Module 4 SQLite storage', () => {
         submittedAt: '2026-11-28T18:00:00Z',
         status: 'late',
       })
-      expect(listAttempts(database, 'a1', 'student-1').map((s) => s.status))
-        .toEqual(['on-time', 'late'])
+      expect(listAttempts(database, 'a1', 'student-1').map((s) => s.status)).toEqual([
+        'on-time',
+        'late',
+      ])
       expect(listAttempts(database, 'a1', 'other')).toEqual([])
 
       saveAccommodation(database, {
@@ -73,8 +75,7 @@ describe('Module 4 SQLite storage', () => {
         reason: 'Approved extension',
         grantedBy: 'instructor-1',
       })
-      expect(getAccommodation(database, 'a1', 'student-1')?.reason)
-        .toBe('Approved extension')
+      expect(getAccommodation(database, 'a1', 'student-1')?.reason).toBe('Approved extension')
     } finally {
       database.close()
     }

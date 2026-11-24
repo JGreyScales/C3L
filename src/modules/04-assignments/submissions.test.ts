@@ -8,9 +8,20 @@ import { createSubmissionStore, MAX_FILE_BYTES } from './submissions'
 
 const dir = mkdtempSync(join(tmpdir(), 'm04-submission-tests-'))
 const database = createDatabase(':memory:')
-saveAssignment(database, { id: 'a1', courseId: '1', title: 'Demo', description: 'Demo', dueAt: '2030-11-23T17:00:00Z', maxAttempts: 3, createdBy: 'teacher' })
+saveAssignment(database, {
+  id: 'a1',
+  courseId: '1',
+  title: 'Demo',
+  description: 'Demo',
+  dueAt: '2030-11-23T17:00:00Z',
+  maxAttempts: 3,
+  createdBy: 'teacher',
+})
 const store = createSubmissionStore(database, dir)
-afterAll(() => { database.close(); rmSync(dir, { recursive: true, force: true }) })
+afterAll(() => {
+  database.close()
+  rmSync(dir, { recursive: true, force: true })
+})
 
 describe('submission storage and validation', () => {
   test('stores file bytes, timestamp and assignment-specific receipt', async () => {
@@ -24,13 +35,27 @@ describe('submission storage and validation', () => {
     expect(store.find('a2', id)).toBeUndefined()
   })
   test('accepts file at size limit', async () => {
-    expect((await store.submit('a1', new File([new Uint8Array(MAX_FILE_BYTES)], 'demo.PDF'), 'bob')).ok).toBe(true)
+    expect(
+      (await store.submit('a1', new File([new Uint8Array(MAX_FILE_BYTES)], 'demo.PDF'), 'bob')).ok,
+    ).toBe(true)
   })
   test('rejects missing, empty, unsupported and oversized files', async () => {
     expect(await store.submit('a1', undefined, 'charlie')).toMatchObject({ ok: false, status: 400 })
-    expect(await store.submit('a1', new File([], 'empty.pdf'), 'charlie')).toMatchObject({ ok: false, status: 400 })
-    expect(await store.submit('a1', new File(['demo'], 'demo.exe'), 'charlie')).toMatchObject({ ok: false, status: 415 })
-    expect(await store.submit('a1', new File([new Uint8Array(MAX_FILE_BYTES + 1)], 'large.txt'), 'charlie')).toMatchObject({ ok: false, status: 413 })
+    expect(await store.submit('a1', new File([], 'empty.pdf'), 'charlie')).toMatchObject({
+      ok: false,
+      status: 400,
+    })
+    expect(await store.submit('a1', new File(['demo'], 'demo.exe'), 'charlie')).toMatchObject({
+      ok: false,
+      status: 415,
+    })
+    expect(
+      await store.submit(
+        'a1',
+        new File([new Uint8Array(MAX_FILE_BYTES + 1)], 'large.txt'),
+        'charlie',
+      ),
+    ).toMatchObject({ ok: false, status: 413 })
   })
   test('limits attempts per student, not globally or per upload demo cap', async () => {
     const file = new File(['demo'], 'demo.txt')

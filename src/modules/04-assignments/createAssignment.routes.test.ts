@@ -5,8 +5,18 @@ import type { Actor, CourseInfo } from './integration'
 
 const database = createDatabase(':memory:')
 const instructor: Actor = { id: 'instructor-1', role: 'instructor', name: 'Teacher' }
-const course: CourseInfo = { id: 'CSCN73030', code: 'CSCN73030', enrollments: [], archived: false, instructorId: 'demo-id' }
-const router = createAssignmentsRouter({ database, getActor: async () => instructor, getCourse: async id => id === course.id ? course : null })
+const course: CourseInfo = {
+  id: 'CSCN73030',
+  code: 'CSCN73030',
+  enrollments: [],
+  archived: false,
+  instructorId: 'demo-id',
+}
+const router = createAssignmentsRouter({
+  database,
+  getActor: async () => instructor,
+  getCourse: async (id) => (id === course.id ? course : null),
+})
 
 const validInput = {
   courseId: 'CSCN73030',
@@ -16,15 +26,20 @@ const validInput = {
 }
 
 function submitAssignment(input: Record<string, string>) {
-  return router.handle(new Request('http://localhost/assignments/new', {
-    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams(input).toString(),
-  }))
+  return router.handle(
+    new Request('http://localhost/assignments/new', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(input).toString(),
+    }),
+  )
 }
 
 describe('M04-FR-001/002: assignment creation routes', () => {
   test('GET shows the creation form', async () => {
-    const response = await router.handle(new Request('http://localhost/assignments/new?courseId=CSCN73030'))
+    const response = await router.handle(
+      new Request('http://localhost/assignments/new?courseId=CSCN73030'),
+    )
     const html = await response.text()
     expect(response.status).toBe(200)
     expect(html).toContain('name="title"')
@@ -59,7 +74,9 @@ describe('M04-FR-001/002: assignment creation routes', () => {
     expect(await list.text()).toContain(id)
   })
   test('course list links to creation form', async () => {
-    const response = await router.handle(new Request('http://localhost/assignments?courseId=CSCN73030'))
+    const response = await router.handle(
+      new Request('http://localhost/assignments?courseId=CSCN73030'),
+    )
     expect(await response.text()).toContain('/04-assignments/assignments/new?courseId=CSCN73030')
   })
 })

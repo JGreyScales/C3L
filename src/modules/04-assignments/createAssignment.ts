@@ -21,7 +21,16 @@ export interface AssignmentFieldErrors {
 }
 
 export type AssignmentValidationResult =
-  | { ok: true; values: { courseId: string; title: string; description: string; dueDate: string; maxAttempts: number } }
+  | {
+      ok: true
+      values: {
+        courseId: string
+        title: string
+        description: string
+        dueDate: string
+        maxAttempts: number
+      }
+    }
   | { ok: false; errors: AssignmentFieldErrors }
 
 export function validateAssignmentInput(input: AssignmentInput): AssignmentValidationResult {
@@ -33,10 +42,14 @@ export function validateAssignmentInput(input: AssignmentInput): AssignmentValid
   if (!title) errors.title = 'Title is required.'
   else if (title.length > 200) errors.title = 'Title must be 200 characters or fewer.'
   if (!description) errors.description = 'Description is required.'
-  else if (description.length > 5000) errors.description = 'Description must be 5000 characters or fewer.'
+  else if (description.length > 5000)
+    errors.description = 'Description must be 5000 characters or fewer.'
   const dueDateResult = parseDueDateInput(input.dueDate)
   if (!dueDateResult.ok) errors.dueDate = dueDateResult.error
-  const maxAttempts = input.maxAttempts === undefined || input.maxAttempts.trim() === '' ? 3 : Number(input.maxAttempts)
+  const maxAttempts =
+    input.maxAttempts === undefined || input.maxAttempts.trim() === ''
+      ? 3
+      : Number(input.maxAttempts)
   if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 50) {
     errors.maxAttempts = 'Maximum attempts must be a whole number between 1 and 50.'
   }
