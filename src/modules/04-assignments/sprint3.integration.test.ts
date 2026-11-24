@@ -14,7 +14,7 @@ const course: CourseInfo = {
   id: '1',
   code: 'PROG2020',
   archived: false,
-  instructorId: 'inst-1',
+  instructorId: teacher.id, // #12: must be this course's own instructor
   enrollments: ['student-1', 'outsider'],
 }
 

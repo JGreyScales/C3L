@@ -16,12 +16,31 @@ export interface CourseInfo {
   archived: boolean
 }
 
+/**
+ * #12: thrown when Module 1 or Module 2 fails (crashes or answers with an error),
+ * so routes can show "Module X is not responding" (503) instead of
+ * "Sign in required" or "Course not found".
+ */
+export class ModuleUnavailableError extends Error {
+  constructor(readonly moduleName: 'Module 1 (login)' | 'Module 2 (courses)') {
+    super(`${moduleName} is not responding. Please try again in a moment.`)
+    this.name = 'ModuleUnavailableError'
+  }
+}
+
 /** Invokes the already-loaded module router; works without an HTTP listener in Bun tests. */
 export async function currentActor(request: Request): Promise<Actor | null> {
-  const response = await identity.router.handle(
-    new Request('http://localhost/api/me', { headers: request.headers }),
-  )
-  if (!response.ok) return null
+  let response: Response
+  try {
+    response = await identity.router.handle(
+      new Request('http://localhost/api/me', { headers: request.headers }),
+    )
+  } catch {
+    throw new ModuleUnavailableError('Module 1 (login)')
+  }
+  // 401 is Module 1's normal "nobody is signed in" answer. Anything else that is not OK is a fault.
+  if (response.status === 401) return null
+  if (!response.ok) throw new ModuleUnavailableError('Module 1 (login)')
   const payload: unknown = await response.json()
   if (!payload || typeof payload !== 'object' || !('user' in payload)) return null
   const user = (payload as { user?: Partial<Actor> }).user
@@ -31,26 +50,46 @@ export async function currentActor(request: Request): Promise<Actor | null> {
 }
 
 export async function findCourse(courseId: string): Promise<CourseInfo | null> {
-  const response = await coursesModule.router.handle(new Request('http://localhost/api/courses'))
-  if (!response.ok) return null
-  const data: unknown = await response.json()
-  if (!data || typeof data !== 'object' || !('courses' in data)) return null
-  const courses = (data as { courses?: CourseInfo[] }).courses
-  if (!Array.isArray(courses)) return null
-  return courses.find((course) => course.id === courseId) ?? null
+  let response: Response
+  try {
+    response = await coursesModule.router.handle(new Request('http://localhost/api/courses'))
+  } catch {
+    throw new ModuleUnavailableError('Module 2 (courses)')
+  }
+  if (!response.ok) throw new ModuleUnavailableError('Module 2 (courses)')
+  // A reply we cannot read is a Module 2 fault, not a missing course.
+  let data: unknown
+  try {
+    data = await response.json()
+  } catch {
+    throw new ModuleUnavailableError('Module 2 (courses)')
+  }
+  const courses = (data as { courses?: CourseInfo[] } | null)?.courses
+  if (!Array.isArray(courses)) throw new ModuleUnavailableError('Module 2 (courses)')
+  // Our assignments may store Module 2's id ("1") or its course code ("PROG2020").
+  return courses.find((course) => course.id === courseId || course.code === courseId) ?? null
 }
 
 export function canSubmit(actor: Actor, course: CourseInfo): boolean {
   return actor.role === 'student' && !course.archived && course.enrollments.includes(actor.id)
 }
 
-export function canManage(actor: Actor, course: CourseInfo): boolean {
-  // Module 2's instructor dropdown currently uses hard-coded demo IDs, not Module 1 user IDs.
-  // Role-based management works now; ownership checks need a real Module 2 identity contract.
-  return !course.archived && (actor.role === 'instructor' || actor.role === 'admin')
+/** True if this user is the course's own instructor (Module 2's instructorId). */
+export function isCourseInstructor(actor: Actor, course: CourseInfo): boolean {
+  return actor.role === 'instructor' && course.instructorId === actor.id
 }
 
-/** Instructors and admins may inspect saved work, including for archived courses. */
-export function canViewHistory(actor: Actor): boolean {
-  return actor.role === 'instructor' || actor.role === 'admin'
+/**
+ * #12: only THIS course's instructor, or an admin, may create assignments, change due dates
+ * or grant accommodations. Note: Module 2 must store the instructor's Module 1 user id as
+ * instructorId; until it does, run the demo's instructor steps as an admin.
+ */
+export function canManage(actor: Actor, course: CourseInfo): boolean {
+  if (course.archived) return false
+  return actor.role === 'admin' || isCourseInstructor(actor, course)
+}
+
+/** This course's instructor or an admin may see every student's saved work, even when archived. */
+export function canViewHistory(actor: Actor, course: CourseInfo): boolean {
+  return actor.role === 'admin' || isCourseInstructor(actor, course)
 }

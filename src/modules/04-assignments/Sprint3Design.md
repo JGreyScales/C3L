@@ -99,6 +99,9 @@ Student uploads a file
 
 ## Known limitations
 
+- Only a course's own instructor (Module 2 `instructorId`) or an admin can manage it (#12).
+  Module 2's instructor IDs are still demo values, not Module 1 user IDs, so until Module 2 stores
+  real IDs a real instructor account is refused: use an admin account for the demo's instructor steps.
 - Module 2's instructor IDs are demo values, not Module 1 user IDs, so any instructor or admin can
   manage any course's assignments. Strict course-owner checks need Module 2 to store real IDs.
 - Module 2's enrollments reset when the server restarts. Students can still see their saved

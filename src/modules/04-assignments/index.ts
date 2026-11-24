@@ -38,6 +38,7 @@ import {
   canManage,
   canSubmit,
   canViewHistory,
+  ModuleUnavailableError,
   currentActor,
   findCourse,
   type Actor,
@@ -71,6 +72,12 @@ const unauthorized = () =>
     401,
     '<h1>Sign in required</h1><p><a href="/01-identity-users">Sign in through Module 1</a>, then return here.</p>',
   )
+const unavailable = (error: ModuleUnavailableError) =>
+  html(
+    503,
+    `<h1>Try again soon</h1><p>${escapeHtml(error.message)}</p>
+    <p><a href="${base}">Back to Module 4</a></p>`,
+  )
 const missing = (kind: string) =>
   html(404, `<h1>${escapeHtml(kind)} not found</h1><p><a href="${base}">Back to Module 4</a></p>`)
 const submissionPath = (assignmentId: string) =>
@@ -98,11 +105,17 @@ export function createAssignmentsRouter(options: RouterOptions = {}) {
   const assignment = (id: string) => getAssignment(database, id)
 
   async function gate(request: Request, courseId: string) {
-    const actor = await resolveActor(request)
-    if (!actor) return { error: unauthorized() }
-    const course = await resolveCourse(courseId)
-    if (!course) return { error: missing('Course') }
-    return { actor, course }
+    try {
+      const actor = await resolveActor(request)
+      if (!actor) return { error: unauthorized() }
+      const course = await resolveCourse(courseId)
+      if (!course) return { error: missing('Course') }
+      return { actor, course }
+    } catch (error) {
+      // #12: Module 1 or 2 is down. Say so clearly instead of "Course not found".
+      if (error instanceof ModuleUnavailableError) return { error: unavailable(error) }
+      throw error
+    }
   }
 
   function renderAssignmentList(courseId: string): string {
@@ -344,7 +357,7 @@ export function createAssignmentsRouter(options: RouterOptions = {}) {
     if (
       actor &&
       course &&
-      (canViewHistory(actor) ||
+      (canViewHistory(actor, course) ||
         (actor.role === 'student' &&
           (!receipt || receipt.studentId === actor.id) &&
           (canSubmit(actor, course) || ownsSavedWork)))
@@ -426,9 +439,16 @@ export function createAssignmentsRouter(options: RouterOptions = {}) {
       .get('/assignments/:id', async ({ params, request }) => {
         const item = assignment(params.id)
         if (!item) return missing('Assignment')
-        const actor = await resolveActor(request)
-        const course = await resolveCourse(item.courseId)
-        return renderAssignmentDetails(item, !!actor && !!course && canManage(actor, course))
+        // The details page is public; it only hides the instructor links if Module 1 or 2 is down.
+        let manage = false
+        try {
+          const actor = await resolveActor(request)
+          const course = await resolveCourse(item.courseId)
+          manage = !!actor && !!course && canManage(actor, course)
+        } catch (error) {
+          if (!(error instanceof ModuleUnavailableError)) throw error
+        }
+        return renderAssignmentDetails(item, manage)
       })
       .get('/assignments/:id/due-date', async ({ params, request }) => {
         const item = assignment(params.id)
@@ -596,7 +616,7 @@ export function createAssignmentsRouter(options: RouterOptions = {}) {
         const checked = await authorizeSubmission(request, item)
         if ('error' in checked) return checked.error
         if (!checked.actor || !checked.course) return forbidden()
-        const studentId = canViewHistory(checked.actor)
+        const studentId = canViewHistory(checked.actor, checked.course)
           ? typeof query.studentId === 'string'
             ? query.studentId
             : ''
@@ -630,7 +650,7 @@ export function createAssignmentsRouter(options: RouterOptions = {}) {
         const checked = await authorizeSubmission(request, item)
         if ('error' in checked) return checked.error
         if (!checked.actor || !checked.course) return forbidden()
-        const studentId = canViewHistory(checked.actor)
+        const studentId = canViewHistory(checked.actor, checked.course)
           ? typeof query.studentId === 'string'
             ? query.studentId
             : ''

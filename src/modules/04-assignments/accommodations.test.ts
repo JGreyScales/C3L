@@ -72,7 +72,7 @@ describe('accommodation management page', () => {
     id: '1',
     code: 'PROG2020',
     enrollments: ['student-1'],
-    instructorId: 'inst-1',
+    instructorId: teacher.id, // #12: must be this course's own instructor
     archived: false,
   }
 
@@ -143,7 +143,7 @@ describe('submit page shows the student their effective deadline', () => {
     id: '1',
     code: 'PROG2020',
     enrollments: ['student-1'],
-    instructorId: 'inst-1',
+    instructorId: teacher.id, // #12: must be this course's own instructor
     archived: false,
   }
   const classDue = '2030-01-01T17:00:00Z'
