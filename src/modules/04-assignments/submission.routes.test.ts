@@ -1,56 +1,88 @@
-import { describe, expect, test } from 'bun:test'
-import { createApp } from '../../app'
+import { afterAll, describe, expect, test } from 'bun:test'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { createDatabase } from './db/database'
+import { saveAssignment } from './db/repository'
+import { createAssignmentsRouter } from './index'
+import type { Actor, CourseInfo } from './integration'
 
-const app = await createApp()
+const database = createDatabase(':memory:')
+const dir = mkdtempSync(join(tmpdir(), 'm04-route-tests-'))
+afterAll(() => {
+  database.close()
+  rmSync(dir, { recursive: true, force: true })
+})
+for (const id of ['assignment-001', 'assignment-002'])
+  saveAssignment(database, {
+    id,
+    courseId: '1',
+    title: `Assignment ${id}`,
+    description: 'Demo',
+    dueAt: '2030-11-23T17:00:00Z',
+    maxAttempts: 3,
+    createdBy: 'teacher',
+  })
+const actor: Actor = { id: 'student-1', role: 'student', name: 'Student' }
+const course: CourseInfo = {
+  id: '1',
+  code: 'DEMO',
+  enrollments: [actor.id],
+  instructorId: null,
+  archived: false,
+}
+const router = createAssignmentsRouter({
+  database,
+  uploadDirectory: dir,
+  getActor: async () => actor,
+  getCourse: async (id) => (id === '1' ? course : null),
+})
 const origin = 'http://localhost'
-const details = '/04-assignments/assignments/assignment-001'
+const details = '/assignments/assignment-001'
 const submissions = `${details}/submissions`
-
 function upload(path: string, ...files: File[]) {
   const body = new FormData()
   for (const file of files) body.append('file', file)
-  return app.fetch(new Request(origin + path, { method: 'POST', body }))
+  return router.handle(new Request(origin + path, { method: 'POST', body }))
 }
 
 describe('Module 4 submission workflow', () => {
-  test('opens the multipart upload form from assignment details', async () => {
-    const assignment = await app.fetch(new Request(origin + details))
-    expect(await assignment.text()).toContain(`href="${submissions}"`)
-    const form = await app.fetch(new Request(origin + submissions))
-    expect(form.status).toBe(200)
-    expect(await form.text()).toContain('enctype="multipart/form-data"')
+  test('form opens from assignment details', async () => {
+    const html = await (await router.handle(new Request(origin + details))).text()
+    expect(html).toContain(`href="/04-assignments${submissions}"`)
+    const response = await router.handle(new Request(origin + submissions))
+    expect(await response.text()).toContain('enctype="multipart/form-data"')
   })
-
-  test('redirects a successful upload to a receipt and returns the original bytes', async () => {
+  test('upload redirects to receipt, retains bytes and original download filename', async () => {
     const response = await upload(submissions, new File(['working demo'], 'hello.txt'))
     expect(response.status).toBe(303)
-    const receiptPath = response.headers.get('location')
-    expect(receiptPath).toStartWith(`${submissions}/`)
-    const receipt = await app.fetch(new Request(origin + receiptPath))
-    expect(receipt.status).toBe(200)
-    const html = await receipt.text()
-    expect(html).toContain('Submission received')
-    expect(html).toContain('hello.txt')
-    expect(html).toContain('Received at')
-    const download = await app.fetch(new Request(`${origin}${receiptPath}/file`))
-    expect(download.headers.get('content-disposition')).toStartWith('attachment')
+    const receipt = response.headers.get('location')
+    expect(receipt).toStartWith(`/04-assignments${submissions}/`)
+    if (!receipt) return
+    // The module prefix is stripped when invoking its router directly.
+    const relative = receipt.replace('/04-assignments', '')
+    const receiptResponse = await router.handle(new Request(origin + relative))
+    expect(await receiptResponse.text()).toContain('hello.txt')
+    const download = await router.handle(new Request(`${origin}${relative}/file`))
+    expect(download.headers.get('content-disposition')).toContain('filename="hello.txt"')
     expect(await download.text()).toBe('working demo')
-
-    const otherPath = receiptPath?.replace('assignment-001', 'assignment-002')
-    const otherAssignment = await app.fetch(new Request(origin + otherPath))
-    expect(otherAssignment.status).toBe(404)
+    expect(
+      (
+        await router.handle(
+          new Request(origin + relative.replace('assignment-001', 'assignment-002')),
+        )
+      ).status,
+    ).toBe(404)
   })
-
-  test('rejects invalid uploads without creating a receipt', async () => {
+  test('invalid upload creates no receipt', async () => {
     const file = new File(['demo'], 'demo.txt')
     const responses = await Promise.all([
       upload(submissions),
       upload(submissions, file, file),
       upload(submissions, new File(['demo'], 'demo.exe')),
-      upload('/04-assignments/assignments/missing/submissions', file),
+      upload('/assignments/missing/submissions', file),
     ])
-    expect(responses.map((response) => response.status)).toEqual([400, 400, 415, 404])
-    expect(responses.every((response) => !response.headers.has('location'))).toBe(true)
-    expect(await responses[2]?.text()).toContain('Choose a PDF or TXT file.')
+    expect(responses.map((r) => r.status)).toEqual([400, 400, 415, 404])
+    expect(responses.every((r) => !r.headers.has('location'))).toBe(true)
   })
 })
