@@ -37,7 +37,9 @@ The module's SQLite file is created under `src/modules/04-assignments/data/assig
 | `POST /04-assignments/assignments/:id/accommodations` | Instructor or admin | Save a deadline extension for an enrolled student |
 | `POST /04-assignments/assignments/:id/submissions` | Enrolled student | New attempt, file saved to disk |
 | `GET /04-assignments/assignments/:id/submissions/history` | Student or instructor | Attempt number, timestamp and status |
-| `GET /04-assignments/api/assignments/:id/submissions` | Student or instructor | JSON history for integration |
+| `GET /04-assignments/assignments/:id/submissions/all` | Instructor or admin | Every student's current attempt (FR-011) |
+| `GET /04-assignments/api/assignments?courseId=1` | Instructor, admin or enrolled student | JSON assignments and deadlines for Calendar/Dashboard (see `API.md`) |
+| `GET /04-assignments/api/assignments/:id/submissions` | Student or instructor | JSON history; instructors without `studentId` get each student's current attempt (see `API.md`) |
 | `GET /04-assignments/assignments/:id/submissions/:receipt` | Student owner or instructor | Receipt |
 | `GET /04-assignments/assignments/:id/submissions/:receipt/file` | Student owner or instructor | Authorized file download with original name |
 
