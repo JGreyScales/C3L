@@ -631,7 +631,7 @@ export function createAssignmentsRouter(options: RouterOptions = {}) {
           item,
           store.history(item.id, studentId),
           studentId,
-          canViewHistory(checked.actor),
+          canViewHistory(checked.actor, checked.course),
         )
       })
       .get('/assignments/:id/submissions/all', async ({ params, request }) => {
@@ -640,7 +640,7 @@ export function createAssignmentsRouter(options: RouterOptions = {}) {
         const checked = await gate(request, item.courseId)
         if ('error' in checked) return checked.error
         // Viewing stays allowed for archived courses, like the rest of the history pages.
-        if (!checked.actor || !canViewHistory(checked.actor))
+        if (!checked.actor || !checked.course || !canViewHistory(checked.actor, checked.course))
           return forbidden('Instructor access required.')
         return allStudentsFor(item, listSubmissionsForAssignment(database, item.id))
       })
@@ -681,11 +681,18 @@ export function createAssignmentsRouter(options: RouterOptions = {}) {
         // Calendar (Module 11) and Dashboard (Module 12): one course's assignments and deadlines.
         const courseId = typeof query.courseId === 'string' ? query.courseId.trim() : ''
         if (!courseId) return Response.json({ error: 'courseId is required.' }, { status: 400 })
-        const actor = await resolveActor(request)
-        if (!actor) return Response.json({ error: 'Sign in required.' }, { status: 401 })
-        const course = await resolveCourse(courseId)
+        let actor: Actor | null
+        let course: CourseInfo | null
+        try {
+          actor = await resolveActor(request)
+          if (!actor) return Response.json({ error: 'Sign in required.' }, { status: 401 })
+          course = await resolveCourse(courseId)
+        } catch (error) {
+          if (!(error instanceof ModuleUnavailableError)) throw error
+          return Response.json({ error: error.message }, { status: 503 })
+        }
         if (!course) return Response.json({ error: 'Course not found.' }, { status: 404 })
-        if (!canViewHistory(actor) && !course.enrollments.includes(actor.id)) {
+        if (!canViewHistory(actor, course) && !course.enrollments.includes(actor.id)) {
           return Response.json({ error: 'You are not in this course.' }, { status: 403 })
         }
         return {
