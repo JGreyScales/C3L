@@ -23,6 +23,7 @@ import {
   getAssignment,
   getAccommodation,
   listAssignments,
+  listSubmissionsForAssignment,
   saveAccommodation,
   type AssignmentRecord,
   type SubmissionRecord,
@@ -39,6 +40,15 @@ import {
   type Actor,
   type CourseInfo,
 } from './integration'
+import {
+  attemptsLeft,
+  buildHistory,
+  newAssignmentNotification,
+  summarizeByStudent,
+  toPublicAssignment,
+  toPublicSubmission,
+} from './attempts'
+import { notifySafely, sendToModule8, type Notifier } from './notifications'
 
 const base = moduleBase(import.meta.dir)
 const html = (status: number, body: string): Response =>
@@ -70,6 +80,8 @@ export interface RouterOptions {
   uploadDirectory?: string
   getActor?: (request: Request) => Promise<Actor | null>
   getCourse?: (courseId: string) => Promise<CourseInfo | null>
+  /** Sends the new-assignment event to Module 8. Tests pass a fake. */
+  notify?: Notifier
 }
 
 /** Factory permits isolated, authenticated integration tests without a running server. */
@@ -78,6 +90,7 @@ export function createAssignmentsRouter(options: RouterOptions = {}) {
   const uploadDirectory = options.uploadDirectory ?? DEFAULT_UPLOADS_DIR
   const resolveActor = options.getActor ?? currentActor
   const resolveCourse = options.getCourse ?? findCourse
+  const notify = options.notify ?? sendToModule8
   const store = createSubmissionStore(database, uploadDirectory)
   const assignment = (id: string) => getAssignment(database, id)
 
@@ -204,26 +217,70 @@ export function createAssignmentsRouter(options: RouterOptions = {}) {
     )
   }
 
-  function historyFor(item: AssignmentRecord, rows: SubmissionRecord[], studentId: string): string {
+  // M04-FR-011: newest attempt first, the current one marked, attempts left shown.
+  function historyFor(
+    item: AssignmentRecord,
+    rows: SubmissionRecord[],
+    studentId: string,
+    isInstructor: boolean,
+  ): string {
+    const left = attemptsLeft(rows, item.maxAttempts)
+    const items = buildHistory(rows)
+      .map(({ attempt, isCurrent }) => {
+        const receipt = `${submissionPath(item.id)}/${encodeURIComponent(attempt.id)}`
+        return `<li>
+        <a href="${receipt}"><strong>Attempt ${attempt.attemptNumber}</strong></a>${isCurrent ? ' <strong>(current)</strong>' : ''}
+        <span>${escapeHtml(attempt.fileName)} — <strong>${escapeHtml(attempt.status)}</strong></span>
+        <span>Submitted ${escapeHtml(attempt.submittedAt)} (UTC)</span>
+        <span>Deadline for this attempt: ${escapeHtml(formatDueDate(attempt.effectiveDueAt))}</span>
+        <span><a href="${receipt}/file">Download file</a></span></li>`
+      })
+      .join('')
+    const next = isInstructor
+      ? `<p><a href="${submissionPath(item.id)}/all">Back to all students</a></p>`
+      : left > 0
+        ? `<p><a href="${submissionPath(item.id)}">Submit a new attempt</a></p>`
+        : '<p>You have used all your attempts for this assignment.</p>'
     return assignmentPage(
       'Submission history',
       `
       <h1>Submission history</h1><p class="facts">Assignment: <strong>${escapeHtml(item.title)}</strong><br>
-      Student ID: ${escapeHtml(studentId)}<br>${rows.length} of ${item.maxAttempts} attempts used</p>
+      Student ID: ${escapeHtml(studentId)}<br>
+      ${rows.length} of ${item.maxAttempts} attempts used · ${left} left</p>
+      ${rows.length ? `<ol class="assignment-list">${items}</ol>` : '<p>No submissions yet.</p>'}
+      ${next}
+      <p><a href="${detailsPath(item.id)}">Back to assignment</a></p>`,
+    )
+  }
+
+  // M04-FR-011: instructor view of every student's current attempt.
+  function allStudentsFor(item: AssignmentRecord, rows: SubmissionRecord[]): string {
+    const summaries = summarizeByStudent(rows, item.id)
+    const late = summaries.filter((s) => s.current.status === 'late').length
+    const body = summaries
+      .map(
+        ({ studentId, attemptCount, current }) => `<tr>
+        <td>${escapeHtml(studentId)}</td>
+        <td>${attemptCount} of ${item.maxAttempts}</td>
+        <td>${escapeHtml(current.fileName)}</td>
+        <td>${escapeHtml(current.submittedAt)} (UTC)</td>
+        <td><strong>${escapeHtml(current.status)}</strong></td>
+        <td><a href="${submissionPath(item.id)}/history?studentId=${encodeURIComponent(studentId)}">All attempts</a>
+          · <a href="${submissionPath(item.id)}/${encodeURIComponent(current.id)}/file">Download</a></td></tr>`,
+      )
+      .join('')
+    return assignmentPage(
+      'All submissions',
+      `
+      <h1>All submissions</h1><p class="facts">Assignment: <strong>${escapeHtml(item.title)}</strong><br>
+      Due: ${escapeHtml(formatDueDate(item.dueAt))}<br>
+      ${summaries.length} student(s) submitted · ${late} current attempt(s) late</p>
       ${
-        rows.length
-          ? `<ol class="assignment-list">${rows
-              .map(
-                (row) => `<li>
-        <a href="${submissionPath(item.id)}/${encodeURIComponent(row.id)}">Attempt ${row.attemptNumber}</a>
-        <span>${escapeHtml(row.fileName)} — ${escapeHtml(row.status)}</span>
-        <span>Submitted ${escapeHtml(row.submittedAt)} (UTC)</span>
-        <span>Effective deadline: ${escapeHtml(formatDueDate(row.effectiveDueAt))}</span></li>`,
-              )
-              .join('')}</ol>`
+        summaries.length
+          ? `<table><thead><tr><th>Student ID</th><th>Attempts</th><th>Current file</th>
+        <th>Submitted</th><th>Status</th><th></th></tr></thead><tbody>${body}</tbody></table>`
           : '<p>No submissions yet.</p>'
       }
-      <p><a href="${submissionPath(item.id)}">Submit a new attempt</a></p>
       <p><a href="${detailsPath(item.id)}">Back to assignment</a></p>`,
     )
   }
@@ -296,6 +353,16 @@ export function createAssignmentsRouter(options: RouterOptions = {}) {
             return forbidden('Instructor access required.')
           const result = createAssignment(body, checked.actor.id, database)
           if (!result.ok) return html(400, renderCreateAssignmentForm(body, result.errors))
+          // Module 8: tell the course's enrolled students about the new assignment.
+          await notifySafely(
+            notify,
+            newAssignmentNotification({
+              courseId: result.assignment.courseId,
+              title: result.assignment.title,
+              dueLabel: formatDueDate(result.assignment.dueDate),
+              userIds: checked.course.enrollments,
+            }),
+          )
           return html(
             201,
             `<h1>Assignment Created Successfully</h1><p><strong>${escapeHtml(result.assignment.title)}</strong> has been created.</p>
@@ -474,12 +541,28 @@ export function createAssignmentsRouter(options: RouterOptions = {}) {
             ? query.studentId
             : ''
           : checked.actor.id
+        // An instructor without a chosen student goes to the all-students overview.
         if (!studentId)
-          return html(
-            400,
-            '<h1>Choose a student</h1><p>Instructors: add ?studentId=... to the history URL.</p>',
-          )
-        return historyFor(item, store.history(item.id, studentId), studentId)
+          return new Response(null, {
+            status: 303,
+            headers: { location: `${submissionPath(item.id)}/all` },
+          })
+        return historyFor(
+          item,
+          store.history(item.id, studentId),
+          studentId,
+          canViewHistory(checked.actor),
+        )
+      })
+      .get('/assignments/:id/submissions/all', async ({ params, request }) => {
+        const item = assignment(params.id)
+        if (!item) return missing('Assignment')
+        const checked = await gate(request, item.courseId)
+        if ('error' in checked) return checked.error
+        // Viewing stays allowed for archived courses, like the rest of the history pages.
+        if (!checked.actor || !canViewHistory(checked.actor))
+          return forbidden('Instructor access required.')
+        return allStudentsFor(item, listSubmissionsForAssignment(database, item.id))
       })
       .get('/api/assignments/:id/submissions', async ({ params, request, query }) => {
         const item = assignment(params.id)
@@ -492,14 +575,42 @@ export function createAssignmentsRouter(options: RouterOptions = {}) {
             ? query.studentId
             : ''
           : checked.actor.id
-        if (!studentId) return Response.json({ error: 'Student ID is required.' }, { status: 400 })
+        if (!studentId) {
+          // Gradebook (Module 6) and analytics (Module 9): each student's current attempt.
+          const summaries = summarizeByStudent(
+            listSubmissionsForAssignment(database, item.id),
+            item.id,
+          )
+          return {
+            assignmentId: item.id,
+            maxAttempts: item.maxAttempts,
+            submissions: summaries.map(({ attemptCount, current }) => ({
+              ...toPublicSubmission(current),
+              attemptCount,
+            })),
+          }
+        }
         return {
           assignmentId: item.id,
           studentId,
           maxAttempts: item.maxAttempts,
-          submissions: store
-            .history(item.id, studentId)
-            .map(({ filePath, ...publicRow }) => publicRow),
+          submissions: store.history(item.id, studentId).map(toPublicSubmission),
+        }
+      })
+      .get('/api/assignments', async ({ query, request }) => {
+        // Calendar (Module 11) and Dashboard (Module 12): one course's assignments and deadlines.
+        const courseId = typeof query.courseId === 'string' ? query.courseId.trim() : ''
+        if (!courseId) return Response.json({ error: 'courseId is required.' }, { status: 400 })
+        const actor = await resolveActor(request)
+        if (!actor) return Response.json({ error: 'Sign in required.' }, { status: 401 })
+        const course = await resolveCourse(courseId)
+        if (!course) return Response.json({ error: 'Course not found.' }, { status: 404 })
+        if (!canViewHistory(actor) && !course.enrollments.includes(actor.id)) {
+          return Response.json({ error: 'You are not in this course.' }, { status: 403 })
+        }
+        return {
+          courseId,
+          assignments: listAssignments(database, courseId).map(toPublicAssignment),
         }
       })
       .get('/assignments/:id/submissions/:receipt', async ({ params, request }) => {
