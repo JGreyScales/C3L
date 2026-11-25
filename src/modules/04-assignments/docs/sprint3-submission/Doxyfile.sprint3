@@ -1,0 +1,18 @@
+PROJECT_NAME           = "C3L Module 4 - Assignment & Submission System"
+PROJECT_BRIEF          = "Group 8 Sprint 3"
+OUTPUT_DIRECTORY       = docs/doxygen-m04-sprint3
+INPUT                  = src/modules/04-assignments
+RECURSIVE              = YES
+FILE_PATTERNS          = *.ts *.md *.sql
+EXTENSION_MAPPING      = ts=Javascript
+EXCLUDE_PATTERNS       = */data/* */node_modules/*
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = YES
+JAVADOC_AUTOBRIEF      = YES
+MARKDOWN_SUPPORT       = YES
+GENERATE_HTML          = YES
+HTML_OUTPUT            = html
+GENERATE_LATEX         = NO
+GENERATE_TREEVIEW      = YES
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = NO

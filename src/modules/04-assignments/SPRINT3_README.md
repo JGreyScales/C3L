@@ -1,56 +1,52 @@
-# Module 4 — Sprint 3 integration and demo
+# Module 4 — Sprint 3 Integration & Demo (Final Team-Fork Candidate)
 
-## Scope
+## Current status
+- Sprint 3 PRs **#16 (storage), #17 (history/APIs) and #18 (accommodations/tests) have been merged** in the team fork.
+- The merged Module 4 feature set is present on team-fork `main`. The PR into class repository `JGreyScales/C3L` is still pending.
+- Proposed tag: `m04-sprint3-v1.0`; **create only after the final documentation and code are committed to `main`**.
+- Known follow-ups, test evidence and release requirements: `RELEASE_NOTES_SPRINT3.md` and `docs/sprint3-test-report.md`.
 
-Everything in this patch lives in `src/modules/04-assignments/`. It replaces the Sprint 1–2 temporary assignment array and upload Map with persistent SQLite rows and files on disk. The **database contract** uses the agreed field names exactly: `dueAt`, `maxAttempts`, `createdBy`, and the complete Submission and Accommodation records. The legacy Sprint 1 form still calls its HTML field `dueDate`; that value is converted to the one persisted `dueAt` column. There is no duplicate deadline column.
+## Storage and permissions
+- Persistent SQLite in `data/assignments.db`; PDF/TXT bytes in `data/uploads/`. Both ignored by Git.
+- SQLite tables: assignments, submissions and accommodations, with foreign keys and per-student unique attempt numbers.
+- On-time/late status uses the effective deadline at upload time; earlier attempts are not rewritten after due-date changes.
+- Module 1 authenticates actors; Module 2 provides course enrollments and instructor assignments.
+- Only an administrator or the course's assigned instructor can manage active-course assignments. **Module 2 currently uses demo instructor IDs**, so use an admin account for the classroom demo.
+- Students can submit only to an active course in which they are enrolled, and may see/download only their own files. Instructors/admins may view historic submissions after a course is archived; changes are blocked.
+- Course enrollments in Module 2 reset on restart; re-enroll the student before another new submission.
 
-## Current integration status
-
-- Sprint 2 PRs #14 and #15 have been merged into the team fork's `main`.
-- Sprint 3 persistence and upload implementation is on `feature/m04-sprint-3-storage` in team PR #16.
-- PR #17 (submission history enhancements) is based on the Sprint 3 storage branch. Merge PR #16 first; then retarget and review #17 separately before merging it to `main`.
-- The team must review/merge within the fork before submitting changes to the upstream class repository. Do not modify other teams' module directories.
-- Verify `bun test src/modules/04-assignments/`, `bun run check` and the live browser workflow before merging. Run `bunx biome check --write src/modules/04-assignments` for formatting within this module only.
-
-## Developer commands
-
+## Development and verification
 ```bash
 bun install
 bun test src/modules/04-assignments/
 bun run check
-bun src/modules/04-assignments/db/seed.ts
 bun run dev
 ```
 
-The module's SQLite file is created under `src/modules/04-assignments/data/assignments.db` and uploads under `data/uploads/`. Both are ignored by the module `.gitignore`. To use a different database path, set `M04_DB_PATH`. To seed a demo course record, set `M04_DEMO_COURSE_ID` and `M04_DEMO_INSTRUCTOR_ID` if appropriate. The defaults use course `1` and a placeholder instructor account; actual instructor account IDs are generated in Module 1.
-
-`createDatabase(':memory:')` is used in the test suite, and persistence tests reopen a disk-backed database.
-
-## Routes
-
-| Route | Role | Purpose |
-| --- | --- | --- |
-| `GET /04-assignments/` | Public | Module 4 landing page |
-| `GET /04-assignments/assignments?courseId=1` | Public | Course assignment list |
-| `POST /04-assignments/assignments/new` | Instructor or admin | Create and persist assignment |
-| `POST /04-assignments/assignments/:id/due-date` | Instructor or admin | Edit persisted deadline |
-| `POST /04-assignments/assignments/:id/accommodations` | Instructor or admin | Save a deadline extension for an enrolled student |
-| `POST /04-assignments/assignments/:id/submissions` | Enrolled student | New attempt, file saved to disk |
-| `GET /04-assignments/assignments/:id/submissions/history` | Student or instructor | Attempt number, timestamp and status |
-| `GET /04-assignments/assignments/:id/submissions/all` | Instructor or admin | Every student's current attempt (FR-011) |
-| `GET /04-assignments/api/assignments?courseId=1` | Instructor, admin or enrolled student | JSON assignments and deadlines for Calendar/Dashboard (see `API.md`) |
-| `GET /04-assignments/api/assignments/:id/submissions` | Student or instructor | JSON history; instructors without `studentId` get each student's current attempt (see `API.md`) |
-| `GET /04-assignments/assignments/:id/submissions/:receipt` | Student owner or instructor | Receipt |
-| `GET /04-assignments/assignments/:id/submissions/:receipt/file` | Student owner or instructor | Authorized file download with original name |
-
-Students cannot specify their `studentId` on upload: the current user is read from Module 1, and enrollment checked against Module 2 `/api/courses`. The role and course checks are called through the other modules' in-process router APIs; no local HTTP server needs to be running for the module's own unit tests.
+## Main routes (base: /04-assignments)
+- `/` — landing page.
+- `/assignments?courseId=1` — assignment list for Module 2's course ID 1.
+- `/assignments/new` — create assignment (admin/authorized instructor).
+- `/assignments/:id/due-date` — change deadline (authorized instructor/admin).
+- `/assignments/:id/accommodations` — grant/list/remove student extensions.
+- `/assignments/:id/submissions` — enrolled-student upload.
+- `/assignments/:id/submissions/history` — student attempts / instructor's selected student.
+- `/assignments/:id/submissions/all` — instructor overview.
+- `/assignments/:id/submissions/:receipt` and `.../:receipt/file` — receipt/download.
+- `/api/assignments?courseId=1` and `/api/assignments/:id/submissions` — JSON integration endpoints; details in `API.md`.
 
 ## Acceptance demo
+1. Launch `bun run dev`, sign in as the Module 1 admin, and verify course `1` in Module 2.
+2. Register and enroll a student using their real Module 1 **user ID** at `/02-courses/enroll`.
+3. As admin, create **Lab 4** (maximum three attempts, future due date).
+4. Sign in as student, upload `draft.txt`; verify receipt and Attempt 1.
+5. Upload `final.txt`; verify Attempt 2 of 3 and history with both files.
+6. Stop and restart `bun run dev` without deleting `data/`; sign in and show the saved assignment/history/downloads.
+7. Re-enroll the student in Module 2 before any further attempt; as admin show the instructor overview.
+8. Optional: adjust due date and grant/remove an accommodation; show on-time/late status as saved per attempt.
 
-1. In Module 1, register the first user (admin), a teacher and a student. The admin promotes the teacher to instructor. Record the two generated user IDs; do not use passwords in screenshots.
-2. In Module 2, verify a course exists (its **ID** `1`, not its course code), and enroll the real student user ID on `/02-courses/enroll`.
-3. Sign in as instructor; in Module 4, create a new assignment with a future deadline, maximum attempts 3.
-4. Sign in as the enrolled student; upload `draft.txt`. Receipt shows **Attempt 1 — on-time**.
-5. Sign in as instructor; change the assignment deadline to a time in the past. Sign back in as student and upload `final.txt`. History shows **Attempt 1 — on-time** and **Attempt 2 — late**. The first result stays on-time because deadlines/statuses are snapshots per submission.
-6. Stop and restart `bun run dev` (do not delete `data/`). Open Module 4 history and both downloads as the student. Both attempts and bytes remain saved.
-7. Optional: Grant that student an accommodation with a future deadline, submit a third attempt (on-time), and verify the fourth is rejected (409) because `maxAttempts=3`.
+## Submission artifacts
+- Complete official **Design Sprint Input PDF** (Step 1 Fixes/Enhancements; Step 2 New Functionality).
+- Complete official **Software Release Note PDF** (Service Name; GitHub Branch/Repo/Tag; Fixed Issues; Known Issues; New Functionality; Regression Tests).
+- Fresh Doxygen HTML ZIP generated from the final fork `main`.
+- Updated collaborative SRS/issues/project board as required; final class-repository PR.
